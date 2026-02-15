@@ -448,10 +448,17 @@ with tab5:
         lot_r_unit = st.slider("1Rの金額（円）", min_value=1000, max_value=100000, value=r_unit, step=1000, key="lot_r_unit")
         st.info(f"最大 {lot_max_r}R = ¥{lot_max_r * lot_r_unit:,}")
     with col2:
-        lot_entry = st.number_input("エントリー価格（円）", min_value=0, max_value=1000000, value=1000, step=1, key="lot_entry")
-        lot_stop = st.number_input("損切り価格（円）", min_value=0, max_value=1000000, value=950, step=1, key="lot_stop")
+        lot_entry_str = st.text_input("エントリー価格（円）", value="1000", key="lot_entry")
+        lot_stop_str = st.text_input("損切り価格（円）", value="950", key="lot_stop")
 
     if st.button("計算", key="calc_lot"):
+        try:
+            lot_entry = float(lot_entry_str) if lot_entry_str else 0
+            lot_stop = float(lot_stop_str) if lot_stop_str else 0
+        except ValueError:
+            st.error("数字を入力してください")
+            lot_entry = 0
+            lot_stop = 0
         _lot_raw = calc_lot_r(
             entry_price=lot_entry,
             stop_loss_price=lot_stop,
