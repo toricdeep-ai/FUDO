@@ -1,5 +1,7 @@
 """FUDO - データ取得モジュール（PRTimes・株探）"""
 
+from __future__ import annotations
+
 import re
 import time
 from datetime import datetime

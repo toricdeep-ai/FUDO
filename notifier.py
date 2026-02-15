@@ -1,5 +1,7 @@
 """FUDO - LINE Messaging API + Discord notification module."""
 
+from __future__ import annotations
+
 import json
 
 import requests

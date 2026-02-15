@@ -3,6 +3,8 @@
 Notion APIを使ってウォッチリストを双方向同期する。
 """
 
+from __future__ import annotations
+
 import requests
 
 from analytics import load_config

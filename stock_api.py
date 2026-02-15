@@ -11,6 +11,8 @@ Excel/楽天RSSの代替として、無料APIで株価データを取得する�
   - yfinance のレート制限: ~360 req/hour 程度
 """
 
+from __future__ import annotations
+
 import time
 import threading
 from datetime import datetime

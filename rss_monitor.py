@@ -14,6 +14,8 @@ yfinance + 株探スクレイピングで株価データを取得・監視する
   - 板データ: 無料APIでは取得不可（常にNone）
 """
 
+from __future__ import annotations
+
 import time
 from collections import deque
 from datetime import datetime

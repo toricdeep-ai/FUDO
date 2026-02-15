@@ -1,5 +1,7 @@
 """FUDO - 統計・期待値計算モジュール"""
 
+from __future__ import annotations
+
 import math
 from pathlib import Path
 
