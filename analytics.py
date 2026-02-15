@@ -7,16 +7,16 @@ import yaml
 
 
 def load_config() -> dict:
-    config_path = Path(__file__).parent / "config.yaml"
+    base = Path(__file__).parent
+    config_path = base / "config.yaml"
     if config_path.exists():
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
-    # Streamlit Cloud: use st.secrets
-    try:
-        import streamlit as st
-        return dict(st.secrets)
-    except Exception:
-        return {}
+    default_path = base / "config.default.yaml"
+    if default_path.exists():
+        with open(default_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    return {}
 
 
 # ---------- 級判定 ----------

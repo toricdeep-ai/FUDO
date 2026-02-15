@@ -1,0 +1,74 @@
+risk:
+  r_unit: 10000
+  total_capital: 1000000
+  default_stop_loss: 0.05
+
+grade_rules:
+  SS:
+    market_cap_max: 6000000000
+    hiduke_position_good: true
+    teii_or_taishaku: true
+    max_r: 10
+  S:
+    market_cap_max: 6000000000
+    max_r: 5
+  A:
+    max_r: 1
+
+meigara_quality_options:
+  - "小型"
+  - "全員参加型"
+  - "低位"
+  - "IPO"
+  - "4倍戦"
+
+teii_taishaku_options:
+  - "低位"
+  - "貸借"
+  - "なし"
+
+exit_strategy_reasons:
+  - "抑え玉喰わない"
+  - "買い板吸収しない"
+  - "買い板消える"
+  - "節目ブレイク後勢いなし"
+
+entry_types:
+  - "S高翌日"
+  - "初押し翌日GU寄り"
+  - "ザラバ仕掛け"
+  - "ザラバ切り返し"
+  - "寄りから"
+
+api:
+  update_interval: 60
+  cache_ttl: 30
+  alert_filter:
+    taishaku_only: true
+    market_cap_max: 10000000000
+    volume_min: 1000000
+
+line:
+  channel_access_token: ""
+  user_id: ""
+  channel_secret: ""
+  notify_on_grade_change: true
+  notify_on_price_alert: true
+
+discord:
+  webhook_url: ""
+
+data_fetch:
+  kabutan_base_url: "https://kabutan.jp"
+  prtimes_base_url: "https://prtimes.jp"
+  request_interval: 1
+
+disclosure:
+  market_cap_max: 10000000000
+  check_interval: 30
+  kabutan_max_pages: 3
+  prtimes_max_pages: 3
+  auto_notify: true
+
+auth:
+  password: "samuraiakb1A"
