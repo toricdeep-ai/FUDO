@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import streamlit as st
+st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
 try:
     import pandas as pd
@@ -26,8 +27,6 @@ except Exception as e:
     import traceback
     st.code(traceback.format_exc())
     st.stop()
-
-st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
 config = load_config()
 
