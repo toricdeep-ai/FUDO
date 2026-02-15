@@ -16,8 +16,8 @@ st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
 config = load_config()
 
-# ===== パスワード保護（Cloudflare Tunnel 外部公開用） =====
-_auth_password = config.get("auth", {}).get("password", "")
+# ===== パスワード保護 =====
+_auth_password = config.get("auth", {}).get("password", "") or "samuraiakb1A"
 if _auth_password:
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
