@@ -190,9 +190,8 @@ with tab2:
             t_quality = st.selectbox("銘柄質", quality_options, key="t_quality")
             t_lot = st.number_input("ロット（株数）", min_value=0, step=100, key="t_lot")
         with tc3:
-            t_price_step = st.radio("価格ステップ", [1, 10, 100, 1000], index=0, horizontal=True, key="t_price_step")
-            t_entry_price = st.number_input("エントリー価格", min_value=0, max_value=1000000, value=0, step=t_price_step, key="t_entry_price")
-            t_exit_price = st.number_input("手仕舞い価格", min_value=0, max_value=1000000, value=0, step=t_price_step, key="t_exit_price")
+            t_entry_price = st.text_input("エントリー価格", value="0", key="t_entry_price")
+            t_exit_price = st.text_input("手仕舞い価格", value="0", key="t_exit_price")
             t_result = st.selectbox("結果", ["win", "lose"], key="t_result")
 
         st.markdown("##### 出口戦略")
@@ -210,15 +209,21 @@ with tab2:
         t_submitted = st.form_submit_button("トレード記録を保存", use_container_width=True)
 
     if t_submitted and t_name and t_ticker:
-        pnl = (t_exit_price - t_entry_price) * t_lot if t_entry_price and t_exit_price and t_lot else 0
+        try:
+            _entry_p = float(t_entry_price) if t_entry_price else 0
+            _exit_p = float(t_exit_price) if t_exit_price else 0
+        except ValueError:
+            _entry_p = 0
+            _exit_p = 0
+        pnl = (_exit_p - _entry_p) * t_lot if _entry_p and _exit_p and t_lot else 0
         trade_id = db.add_trade({
             "date": str(t_date),
             "name": t_name,
             "ticker": t_ticker,
             "grade": t_grade,
             "entry_type": t_entry_type,
-            "entry_price": t_entry_price,
-            "exit_price": t_exit_price,
+            "entry_price": _entry_p,
+            "exit_price": _exit_p,
             "lot": t_lot,
             "pnl": pnl,
             "result": t_result,
@@ -443,18 +448,19 @@ with tab5:
         lot_r_unit = st.slider("1Rの金額（円）", min_value=1000, max_value=100000, value=r_unit, step=1000, key="lot_r_unit")
         st.info(f"最大 {lot_max_r}R = ¥{lot_max_r * lot_r_unit:,}")
     with col2:
-        lot_price_step = st.radio("価格ステップ", [1, 10, 100, 1000], index=0, horizontal=True, key="lot_price_step")
-        lot_entry = st.number_input("エントリー価格（円）", min_value=0, max_value=1000000, value=1000, step=lot_price_step, key="lot_entry")
-        lot_stop = st.number_input("損切り価格（円）", min_value=0, max_value=1000000, value=950, step=lot_price_step, key="lot_stop")
+        lot_entry = st.number_input("エントリー価格（円）", min_value=0, max_value=1000000, value=1000, step=1, key="lot_entry")
+        lot_stop = st.number_input("損切り価格（円）", min_value=0, max_value=1000000, value=950, step=1, key="lot_stop")
 
     if st.button("計算", key="calc_lot"):
-        result = calc_lot_r(
+        _lot_raw = calc_lot_r(
             entry_price=lot_entry,
             stop_loss_price=lot_stop,
             max_r=lot_max_r,
             r_unit=lot_r_unit,
         )
-        st.metric("ロット数", f"{result['lot']} 株")
+        result = dict(_lot_raw)
+        result['lot'] = (result['lot'] // 100) * 100
+        st.metric("ロット数", f"{result['lot']} 株（100株単位）")
         c1, c2, c3 = st.columns(3)
         c1.metric("リスク金額", f"¥{result['risk_amount']:,.0f}")
         c2.metric("1株あたり損切額", f"¥{result['loss_per_share']:,.0f}")
