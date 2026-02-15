@@ -69,7 +69,8 @@ with st.sidebar:
         input_margin = st.slider("信用買残（%）", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
         input_fushi = st.text_input("節目（例: 1500, 1450）")
         input_pts = st.slider("PTS出来高", min_value=0, max_value=1000000, value=0, step=100)
-        input_disclosure = st.number_input("日々公表カウント", min_value=0, step=1)
+        input_disclosure = st.number_input("日々公表カウント", min_value=0, max_value=3, step=1)
+        input_mashitanpo = st.selectbox("増し担保規制", ["なし", "あり"])
         input_hiduke = st.checkbox("日足位置が良い")
         input_teii = st.selectbox("低位 / 貸借", teii_options)
         input_quality = st.selectbox("銘柄質", quality_options)
@@ -103,7 +104,7 @@ with st.sidebar:
             "grade": grade,
             "max_r": max_r,
             "lot_strategy": lot_text,
-            "memo": input_memo,
+            "memo": f"[増担:{input_mashitanpo}] {input_memo}" if input_mashitanpo == "あり" else input_memo,
         })
         st.success(f"追加しました（ID: {stock_id}、{lot_text}）")
         st.rerun()
