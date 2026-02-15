@@ -10,7 +10,14 @@ from analytics import (
     calc_entry_type_stats, calc_stop_reason_stats, calc_quality_stats,
     calc_trade_statistics, load_config,
 )
-from rss_monitor import get_rss_prices, get_rss_board, check_surge_alerts, check_price_alerts, check_fushi_alerts
+try:
+    from rss_monitor import get_rss_prices, get_rss_board, check_surge_alerts, check_price_alerts, check_fushi_alerts
+except Exception:
+    get_rss_prices = None
+    get_rss_board = None
+    check_surge_alerts = None
+    check_price_alerts = None
+    check_fushi_alerts = None
 
 st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
