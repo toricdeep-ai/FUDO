@@ -2,23 +2,30 @@
 from __future__ import annotations
 
 import streamlit as st
-import pandas as pd
-from datetime import date, timedelta
 
-import database as db
-from analytics import (
-    judge_grade, calc_lot_r, calc_expected_value,
-    calc_entry_type_stats, calc_stop_reason_stats, calc_quality_stats,
-    calc_trade_statistics, load_config,
-)
 try:
-    from rss_monitor import get_rss_prices, get_rss_board, check_surge_alerts, check_price_alerts, check_fushi_alerts
-except Exception:
-    get_rss_prices = None
-    get_rss_board = None
-    check_surge_alerts = None
-    check_price_alerts = None
-    check_fushi_alerts = None
+    import pandas as pd
+    from datetime import date, timedelta
+
+    import database as db
+    from analytics import (
+        judge_grade, calc_lot_r, calc_expected_value,
+        calc_entry_type_stats, calc_stop_reason_stats, calc_quality_stats,
+        calc_trade_statistics, load_config,
+    )
+    try:
+        from rss_monitor import get_rss_prices, get_rss_board, check_surge_alerts, check_price_alerts, check_fushi_alerts
+    except Exception:
+        get_rss_prices = None
+        get_rss_board = None
+        check_surge_alerts = None
+        check_price_alerts = None
+        check_fushi_alerts = None
+except Exception as e:
+    st.error(f"Import error: {e}")
+    import traceback
+    st.code(traceback.format_exc())
+    st.stop()
 
 st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
