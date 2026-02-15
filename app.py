@@ -183,8 +183,8 @@ with tab2:
             t_quality = st.selectbox("銘柄質", quality_options, key="t_quality")
             t_lot = st.number_input("ロット（株数）", min_value=0, step=100, key="t_lot")
         with tc3:
-            t_entry_price = st.slider("エントリー価格", min_value=0, max_value=30000, value=0, step=1, key="t_entry_price")
-            t_exit_price = st.slider("手仕舞い価格", min_value=0, max_value=30000, value=0, step=1, key="t_exit_price")
+            t_entry_price = st.number_input("エントリー価格", min_value=0, max_value=100000, value=0, step=1, key="t_entry_price")
+            t_exit_price = st.number_input("手仕舞い価格", min_value=0, max_value=100000, value=0, step=1, key="t_exit_price")
             t_result = st.selectbox("結果", ["win", "lose"], key="t_result")
 
         st.markdown("##### 出口戦略")
@@ -435,8 +435,8 @@ with tab5:
         lot_r_unit = st.slider("1Rの金額（円）", min_value=1000, max_value=100000, value=r_unit, step=1000, key="lot_r_unit")
         st.info(f"最大 {lot_max_r}R = ¥{lot_max_r * lot_r_unit:,}")
     with col2:
-        lot_entry = st.slider("エントリー価格（円）", min_value=0, max_value=30000, value=1000, step=1, key="lot_entry")
-        lot_stop = st.slider("損切り価格（円）", min_value=0, max_value=30000, value=950, step=1, key="lot_stop")
+        lot_entry = st.number_input("エントリー価格（円）", min_value=0, max_value=100000, value=1000, step=1, key="lot_entry")
+        lot_stop = st.number_input("損切り価格（円）", min_value=0, max_value=100000, value=950, step=1, key="lot_stop")
 
     if st.button("計算", key="calc_lot"):
         result = calc_lot_r(
