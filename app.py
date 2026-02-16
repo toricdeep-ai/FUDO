@@ -6,7 +6,12 @@ st.set_page_config(page_title="FUDO", page_icon="📊", layout="wide")
 
 try:
     import pandas as pd
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta, timezone
+
+    JST = timezone(timedelta(hours=9))
+
+    def today_jst():
+        return datetime.now(JST).date()
 
     import database as db
     from analytics import (
@@ -64,7 +69,7 @@ with st.sidebar:
         with col2:
             input_ticker = st.text_input("証券コード")
 
-        input_date = st.date_input("日付", value=date.today())
+        input_date = st.date_input("日付", value=today_jst())
         input_market_cap = st.slider("時価総額（億円）", min_value=0, max_value=1000, value=0, step=1)
         input_margin = st.slider("信用買残（%）", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
         input_fushi = st.text_input("節目（例: 1500, 1450）")
@@ -125,7 +130,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
 with tab1:
     col_date, col_refresh = st.columns([3, 1])
     with col_date:
-        filter_date = st.date_input("日付フィルタ", value=date.today(), key="filter_date")
+        filter_date = st.date_input("日付フィルタ", value=today_jst(), key="filter_date")
     with col_refresh:
         st.write("")
         st.write("")
@@ -182,7 +187,7 @@ with tab2:
         st.markdown("##### 基本情報")
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
-            t_date = st.date_input("日付", value=date.today(), key="t_date")
+            t_date = st.date_input("日付", value=today_jst(), key="t_date")
             t_name = st.text_input("銘柄名", key="t_name")
             t_ticker = st.text_input("証券コード", key="t_ticker")
         with tc2:
@@ -205,6 +210,13 @@ with tab2:
             t_stop3 = st.checkbox("買い板消える", key="t_stop3")
         with sc4:
             t_stop4 = st.checkbox("節目ブレイク後勢いなし", key="t_stop4")
+        sc5, sc6, sc7, _ = st.columns(4)
+        with sc5:
+            t_stop5 = st.checkbox("買い板はめこみ", key="t_stop5")
+        with sc6:
+            t_stop6 = st.checkbox("指値ケア反応悪く下振り懸念", key="t_stop6")
+        with sc7:
+            t_stop7 = st.checkbox("買い板弱くなる", key="t_stop7")
 
         t_memo = st.text_area("メモ", height=68, key="t_memo")
         t_submitted = st.form_submit_button("トレード記録を保存", use_container_width=True)
@@ -232,6 +244,9 @@ with tab2:
             "stop_itakyushu": 1 if t_stop2 else 0,
             "stop_itakieru": 1 if t_stop3 else 0,
             "stop_fushi_noforce": 1 if t_stop4 else 0,
+            "stop_hamekomi": 1 if t_stop5 else 0,
+            "stop_sashene_care": 1 if t_stop6 else 0,
+            "stop_ita_yowaku": 1 if t_stop7 else 0,
             "meigara_quality": t_quality,
             "memo": t_memo,
         })
@@ -251,12 +266,14 @@ with tab2:
             "lot": "ロット", "pnl": "損益", "result": "結果",
             "stop_osaedama": "抑え玉", "stop_itakyushu": "板吸収",
             "stop_itakieru": "板消え", "stop_fushi_noforce": "勢いなし",
+            "stop_hamekomi": "はめこみ", "stop_sashene_care": "指値ケア",
+            "stop_ita_yowaku": "板弱化",
             "memo": "メモ",
         }
         df_show = df_t[[c for c in show_cols if c in df_t.columns]].rename(columns=show_cols)
 
         # チェックボックス列を○×表示
-        for col in ["抑え玉", "板吸収", "板消え", "勢いなし"]:
+        for col in ["抑え玉", "板吸収", "板消え", "勢いなし", "はめこみ", "指値ケア", "板弱化"]:
             if col in df_show.columns:
                 df_show[col] = df_show[col].apply(lambda x: "✓" if x else "")
 
@@ -449,6 +466,7 @@ with tab5:
         lot_r_unit = st.slider("1Rの金額（円）", min_value=1000, max_value=100000, value=r_unit, step=1000, key="lot_r_unit")
         st.info(f"最大 {lot_max_r}R = ¥{lot_max_r * lot_r_unit:,}")
     with col2:
+        lot_ticker_input = st.text_input("証券コード（ウォッチリスト登録用）", value="", key="lot_ticker_input", placeholder="例: 6920")
         lot_entry_str = st.text_input("エントリー価格（円）", value="1000", key="lot_entry")
         lot_stop_str = st.text_input("損切り価格（円）", value="950", key="lot_stop")
 
@@ -468,11 +486,45 @@ with tab5:
         )
         result = dict(_lot_raw)
         result['lot'] = (result['lot'] // 100) * 100
+        st.session_state["lot_calc_result"] = result
+        st.session_state["lot_calc_grade"] = lot_grade
+        st.session_state["lot_calc_ticker"] = lot_ticker_input
+        st.session_state["lot_calc_entry"] = lot_entry
+
         st.metric("ロット数", f"{result['lot']} 株（100株単位）")
         c1, c2, c3 = st.columns(3)
         c1.metric("リスク金額", f"¥{result['risk_amount']:,.0f}")
         c2.metric("1株あたり損切額", f"¥{result['loss_per_share']:,.0f}")
         c3.metric("ポジションサイズ", f"¥{result['position_size']:,.0f}")
+
+    # --- ウォッチリストにロット追加 ---
+    if st.session_state.get("lot_calc_result") and st.session_state.get("lot_calc_ticker"):
+        _ticker = st.session_state["lot_calc_ticker"]
+        _result = st.session_state["lot_calc_result"]
+        _grade = st.session_state["lot_calc_grade"]
+        _entry = st.session_state.get("lot_calc_entry", 0)
+
+        matched = db.get_stocks_by_ticker(_ticker)
+        if matched:
+            latest = matched[0]
+            lot_text = f"{_grade}級 / {_result['lot']}株 / IN:¥{_entry:,.0f} / リスク:¥{_result['risk_amount']:,.0f}"
+            st.markdown("---")
+            st.markdown(f"**{latest['name']}（{_ticker}）** のウォッチリスト（ID: {latest['id']}）にロット情報を追加")
+            if st.button("ウォッチリストにロット追加", key="add_lot_to_wl"):
+                existing_memo = latest.get("memo", "") or ""
+                new_memo = f"{existing_memo}\n[ロット] {lot_text}".strip()
+                db.update_stock(latest["id"], {
+                    "grade": _grade,
+                    "max_r": _result["max_r"],
+                    "lot_strategy": lot_text,
+                    "memo": new_memo,
+                })
+                st.success(f"{latest['name']} にロット情報を追加しました: {lot_text}")
+                st.session_state.pop("lot_calc_result", None)
+                st.session_state.pop("lot_calc_ticker", None)
+                st.rerun()
+        else:
+            st.info(f"証券コード {_ticker} はウォッチリストに登録されていません。先にサイドバーから銘柄を追加してください。")
 
 # --- タブ6: 期待値計算 ---
 with tab6:
@@ -509,7 +561,7 @@ with tab7:
     # フィルタ
     fc1, fc2, fc3 = st.columns(3)
     with fc1:
-        disc_date = st.date_input("日付フィルタ", value=date.today(), key="disc_date")
+        disc_date = st.date_input("日付フィルタ", value=today_jst(), key="disc_date")
     with fc2:
         disc_source = st.selectbox("ソース", ["すべて", "kabutan", "prtimes"], key="disc_source")
     with fc3:
@@ -556,7 +608,7 @@ with tab7:
                 target = next((d for d in disclosures if d["id"] == add_disc_id), None)
                 if target:
                     stock_id = db.add_stock({
-                        "date": str(date.today()),
+                        "date": str(today_jst()),
                         "name": target["company_name"],
                         "ticker": target["ticker"],
                         "market_cap": target.get("market_cap"),
@@ -652,6 +704,21 @@ with tab8:
     if monitor_stop:
         st.session_state["monitor_active"] = False
 
+    # --- ウォッチリストから自動入力 ---
+    wl_stocks = db.get_stocks(str(today_jst()))
+    if not wl_stocks:
+        wl_stocks = db.get_stocks()
+    if wl_stocks:
+        wl_tickers = [f"{s['ticker']} ({s['name']})" for s in wl_stocks if s.get('ticker')]
+        selected_wl = st.multiselect("ウォッチリストから選択", wl_tickers, key="monitor_wl_select")
+        if selected_wl:
+            auto_tickers = [t.split(" ")[0] for t in selected_wl]
+            existing = monitor_input or ""
+            if st.button("選択した銘柄を追加", key="add_wl_to_monitor"):
+                combined = existing + ("\n" if existing else "") + "\n".join(auto_tickers)
+                st.session_state["monitor_tickers"] = combined
+                st.rerun()
+
     # --- リアルタイム自動更新フラグメント ---
     @st.fragment(run_every=timedelta(seconds=rss_interval))
     def _monitor_fragment():
@@ -663,34 +730,57 @@ with tab8:
         if not tickers:
             return
 
-        from datetime import datetime as _dt
-        st.caption(f"自動更新中（{rss_interval}秒間隔）　最終更新: {_dt.now().strftime('%H:%M:%S')}")
+        now_jst = datetime.now(JST)
+        st.caption(f"自動更新中（{rss_interval}秒間隔）　最終更新: {now_jst.strftime('%H:%M:%S')}")
 
-        prices = get_rss_prices(tickers)
+        try:
+            prices = get_rss_prices(tickers)
+        except Exception as e:
+            st.error(f"データ取得エラー: {e}")
+            return
+
+        if not prices:
+            st.warning("株価データを取得できませんでした。市場時間外か、APIに問題がある可能性があります。")
+            return
+
         price_map = {p["ticker"]: p for p in prices}
 
         # 3分間+4%急騰チェック → LINE通知
         if st.session_state.get("alert_surge", True):
-            surge_hits = check_surge_alerts(prices)
-            if surge_hits:
-                surge_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in surge_hits)
-                st.success(f"🚀 急騰検出 → LINE通知済: {surge_names}")
+            try:
+                surge_hits = check_surge_alerts(prices)
+                if surge_hits:
+                    surge_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in surge_hits)
+                    st.success(f"🚀 急騰検出 → LINE通知済: {surge_names}")
+            except Exception:
+                pass
 
         # RSSスクリーニング（貸借/時価総額/出来高） → LINE通知
         if st.session_state.get("alert_screen", True):
-            from rss_monitor import screen_and_notify
-            screen_hits = screen_and_notify(prices)
-            if screen_hits:
-                screen_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in screen_hits)
-                st.success(f"🔍 スクリーニングHIT → LINE通知済: {screen_names}")
+            try:
+                from rss_monitor import screen_and_notify
+                screen_hits = screen_and_notify(prices)
+                if screen_hits:
+                    screen_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in screen_hits)
+                    st.success(f"🔍 スクリーニングHIT → LINE通知済: {screen_names}")
+            except Exception:
+                pass
 
         # 価格 / 出来高アラート
         if st.session_state.get("alert_price", True):
-            check_price_alerts(prices)
+            try:
+                check_price_alerts(prices)
+            except Exception:
+                pass
 
         # 節目アラート
         if st.session_state.get("alert_fushi", True):
-            check_fushi_alerts(prices)
+            try:
+                check_fushi_alerts(prices)
+            except Exception:
+                pass
+
+        st.success(f"取得成功: {len(prices)}/{len(tickers)} 銘柄")
 
         for ticker in tickers:
             p = price_map.get(ticker)

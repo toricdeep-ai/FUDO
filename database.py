@@ -66,6 +66,9 @@ def init_db():
             stop_itakyushu INTEGER DEFAULT 0,
             stop_itakieru INTEGER DEFAULT 0,
             stop_fushi_noforce INTEGER DEFAULT 0,
+            stop_hamekomi INTEGER DEFAULT 0,
+            stop_sashene_care INTEGER DEFAULT 0,
+            stop_ita_yowaku INTEGER DEFAULT 0,
             meigara_quality TEXT,
             memo TEXT,
             created_at TEXT DEFAULT (datetime('now','localtime'))
@@ -118,6 +121,18 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now','localtime'))
         )
     """)
+
+    # --- マイグレーション: 新しい出口戦略カラムを追加 ---
+    _migrate_columns = [
+        ("trades", "stop_hamekomi", "INTEGER DEFAULT 0"),
+        ("trades", "stop_sashene_care", "INTEGER DEFAULT 0"),
+        ("trades", "stop_ita_yowaku", "INTEGER DEFAULT 0"),
+    ]
+    for table, col, col_type in _migrate_columns:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass  # カラムが既に存在する場合は無視
 
     conn.commit()
     conn.close()
@@ -227,8 +242,9 @@ def add_trade(data: dict) -> int:
             (date, name, ticker, grade, entry_type, entry_price, exit_price,
              lot, pnl, result,
              stop_osaedama, stop_itakyushu, stop_itakieru, stop_fushi_noforce,
+             stop_hamekomi, stop_sashene_care, stop_ita_yowaku,
              meigara_quality, memo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("date", str(date.today())),
         data["name"],
@@ -244,6 +260,9 @@ def add_trade(data: dict) -> int:
         data.get("stop_itakyushu", 0),
         data.get("stop_itakieru", 0),
         data.get("stop_fushi_noforce", 0),
+        data.get("stop_hamekomi", 0),
+        data.get("stop_sashene_care", 0),
+        data.get("stop_ita_yowaku", 0),
         data.get("meigara_quality"),
         data.get("memo"),
     ))
