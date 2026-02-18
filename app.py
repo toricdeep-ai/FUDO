@@ -777,17 +777,18 @@ with tab8:
             except ImportError:
                 st.error("yfinance: 未インストール")
         with env_c2:
-            from stock_api import test_connection
-            ok, msg = test_connection()
-            if ok:
-                st.success(f"API接続: {msg}")
-            else:
-                st.error(f"API接続: {msg}")
+            try:
+                from stock_api import test_connection
+                ok, msg = test_connection()
+                if ok:
+                    st.success(f"API接続: {msg}")
+                else:
+                    st.error(f"API接続: {msg}")
+            except Exception as e:
+                st.error(f"API接続チェック失敗: {e}")
         with env_c3:
-            from notifier import send_line, get_last_line_status
             _line_cfg = config.get("line", {})
             _has_token = bool(_line_cfg.get("channel_access_token", ""))
-            # Streamlit secrets もチェック
             try:
                 _secrets_line = st.secrets.get("line", {})
                 if _secrets_line.get("channel_access_token", ""):
@@ -800,12 +801,16 @@ with tab8:
                 st.error("LINE: トークン未設定（Secrets に line.channel_access_token を設定）")
 
         if st.button("LINE通知テスト", key="line_test_btn"):
-            test_ok = send_line("FUDO 監視パネル テスト通知")
-            status = get_last_line_status()
-            if test_ok:
-                st.success(f"LINE通知テスト成功")
-            else:
-                st.error(f"LINE通知テスト失敗: {status['msg']}")
+            try:
+                from notifier import send_line, get_last_line_status
+                test_ok = send_line("FUDO 監視パネル テスト通知")
+                status = get_last_line_status()
+                if test_ok:
+                    st.success("LINE通知テスト成功")
+                else:
+                    st.error(f"LINE通知テスト失敗: {status['msg']}")
+            except Exception as e:
+                st.error(f"LINE通知モジュールエラー: {e}")
 
     # --- アラート ON/OFF トグル ---
     st.markdown("##### アラート設定")

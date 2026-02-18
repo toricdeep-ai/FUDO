@@ -35,6 +35,9 @@ exit_strategy_reasons:
   - "買い板はめこみ"
   - "指値ケア反応悪く下振り懸念"
   - "買い板弱くなる"
+  - "上を買わなくなる"
+  - "夜間PTS"
+  - "持ち越し翌日売り"
 
 entry_positions:
   - "蓋や厚板喰い"
@@ -82,6 +85,11 @@ disclosure:
   kabutan_max_pages: 3
   prtimes_max_pages: 3
   auto_notify: true
+
+notion:
+  api_key: ""
+  database_id: ""
+  sync_interval: 300
 
 auth:
   password: "samuraiakb1A"
