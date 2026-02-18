@@ -175,14 +175,24 @@ with tab1:
         styled = df_display.style.applymap(grade_color, subset=["級"] if "級" in df_display.columns else [])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
-        # メモ全文表示
-        with st.expander("メモ一覧（全銘柄）", expanded=False):
+        # メモ一覧（編集可能）
+        with st.expander("メモ一覧（編集可能）", expanded=False):
             for s in stocks:
                 memo = s.get("memo", "") or ""
-                if memo:
-                    st.markdown(f"**{s['name']}（{s['ticker']}）** ID:{s['id']}")
-                    st.text(memo)
-                    st.markdown("---")
+                st.markdown(f"**{s['name']}（{s['ticker']}）** ID:{s['id']}")
+                new_memo = st.text_area(
+                    f"メモ_{s['id']}",
+                    value=memo,
+                    height=100,
+                    key=f"memo_edit_{s['id']}",
+                    label_visibility="collapsed",
+                )
+                if new_memo != memo:
+                    if st.button(f"保存", key=f"memo_save_{s['id']}"):
+                        db.update_stock(s["id"], {"memo": new_memo})
+                        st.success(f"{s['name']} のメモを保存しました")
+                        st.rerun()
+                st.markdown("---")
 
         with st.expander("銘柄を削除"):
             del_id = st.number_input("削除するID", min_value=1, step=1, key="del_id")

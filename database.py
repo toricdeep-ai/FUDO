@@ -174,6 +174,7 @@ def add_stock(data: dict) -> int:
     conn.commit()
     stock_id = cur.lastrowid
     conn.close()
+    _auto_backup()
     return stock_id
 
 
@@ -196,6 +197,7 @@ def update_stock(stock_id: int, data: dict):
     )
     conn.commit()
     conn.close()
+    _auto_backup()
 
 
 def delete_stock(stock_id: int):
@@ -204,6 +206,7 @@ def delete_stock(stock_id: int):
     conn.execute("DELETE FROM watchlist WHERE id = ?", (stock_id,))
     conn.commit()
     conn.close()
+    _auto_backup()
 
 
 def get_stocks(target_date: str = None) -> list[dict]:
@@ -281,6 +284,7 @@ def add_trade(data: dict) -> int:
     conn.commit()
     trade_id = cur.lastrowid
     conn.close()
+    _auto_backup()
     return trade_id
 
 
@@ -328,6 +332,7 @@ def update_trade(trade_id: int, data: dict):
     )
     conn.commit()
     conn.close()
+    _auto_backup()
 
 
 def get_trade_by_id(trade_id: int) -> dict | None:
@@ -344,6 +349,7 @@ def delete_trade(trade_id: int):
     conn.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
     conn.commit()
     conn.close()
+    _auto_backup()
 
 
 # ========== 価格アラート ==========
@@ -487,5 +493,24 @@ def mark_disclosure_notified(disclosure_id: int):
     conn.close()
 
 
-# 起動時にDB初期化
+# ========== クラウド永続化 ==========
+
+def _auto_backup():
+    """データ変更後に GitHub へ自動バックアップ（設定済みの場合のみ）"""
+    try:
+        from cloud_storage import is_configured, backup_db
+        if is_configured():
+            backup_db()
+    except Exception:
+        pass
+
+
+# 起動時にクラウドから復元 → DB初期化
+try:
+    from cloud_storage import is_configured, restore_db
+    if is_configured():
+        restore_db()
+except Exception:
+    pass
+
 init_db()
