@@ -69,6 +69,7 @@ def init_db():
             stop_hamekomi INTEGER DEFAULT 0,
             stop_sashene_care INTEGER DEFAULT 0,
             stop_ita_yowaku INTEGER DEFAULT 0,
+            entry_position TEXT,
             meigara_quality TEXT,
             memo TEXT,
             created_at TEXT DEFAULT (datetime('now','localtime'))
@@ -122,11 +123,16 @@ def init_db():
         )
     """)
 
-    # --- マイグレーション: 新しい出口戦略カラムを追加 ---
+    # --- マイグレーション: 新しいカラムを追加 ---
     _migrate_columns = [
         ("trades", "stop_hamekomi", "INTEGER DEFAULT 0"),
         ("trades", "stop_sashene_care", "INTEGER DEFAULT 0"),
         ("trades", "stop_ita_yowaku", "INTEGER DEFAULT 0"),
+        ("trades", "entry_position", "TEXT"),
+        ("trades", "stop_ue_kawanai", "INTEGER DEFAULT 0"),
+        ("trades", "stop_yakan_pts", "INTEGER DEFAULT 0"),
+        ("trades", "stop_mochikoshi", "INTEGER DEFAULT 0"),
+        ("watchlist", "prev_day_sell_volume", "INTEGER DEFAULT 0"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -145,8 +151,8 @@ def add_stock(data: dict) -> int:
         INSERT INTO watchlist
             (date, name, ticker, market_cap, margin_buy_ratio, fushi,
              pts_volume, daily_disclosure_count, hiduke_position_good, teii_or_taishaku,
-             meigara_quality, grade, max_r, lot_strategy, memo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             meigara_quality, grade, max_r, lot_strategy, memo, prev_day_sell_volume)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("date", str(date.today())),
         data["name"],
@@ -163,6 +169,7 @@ def add_stock(data: dict) -> int:
         data.get("max_r"),
         data.get("lot_strategy"),
         data.get("memo"),
+        data.get("prev_day_sell_volume", 0),
     ))
     conn.commit()
     stock_id = cur.lastrowid
@@ -239,18 +246,20 @@ def add_trade(data: dict) -> int:
     conn = get_connection()
     cur = conn.execute("""
         INSERT INTO trades
-            (date, name, ticker, grade, entry_type, entry_price, exit_price,
+            (date, name, ticker, grade, entry_type, entry_position, entry_price, exit_price,
              lot, pnl, result,
              stop_osaedama, stop_itakyushu, stop_itakieru, stop_fushi_noforce,
              stop_hamekomi, stop_sashene_care, stop_ita_yowaku,
+             stop_ue_kawanai, stop_yakan_pts, stop_mochikoshi,
              meigara_quality, memo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("date", str(date.today())),
         data["name"],
         data["ticker"],
         data.get("grade"),
         data.get("entry_type"),
+        data.get("entry_position"),
         data.get("entry_price"),
         data.get("exit_price"),
         data.get("lot"),
@@ -263,6 +272,9 @@ def add_trade(data: dict) -> int:
         data.get("stop_hamekomi", 0),
         data.get("stop_sashene_care", 0),
         data.get("stop_ita_yowaku", 0),
+        data.get("stop_ue_kawanai", 0),
+        data.get("stop_yakan_pts", 0),
+        data.get("stop_mochikoshi", 0),
         data.get("meigara_quality"),
         data.get("memo"),
     ))
@@ -295,6 +307,35 @@ def get_trades_by_entry_type(entry_type: str) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def update_trade(trade_id: int, data: dict):
+    """トレード記録を更新する"""
+    fields = []
+    values = []
+    for key, val in data.items():
+        if key in ("id", "created_at"):
+            continue
+        fields.append(f"{key} = ?")
+        values.append(val)
+    if not fields:
+        return
+    values.append(trade_id)
+    conn = get_connection()
+    conn.execute(
+        f"UPDATE trades SET {', '.join(fields)} WHERE id = ?",
+        values,
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_trade_by_id(trade_id: int) -> dict | None:
+    """IDでトレード記録を取得する"""
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def delete_trade(trade_id: int):

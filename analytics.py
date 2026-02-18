@@ -456,6 +456,9 @@ def calc_stop_reason_stats(trades: list[dict]) -> list[dict]:
         "stop_hamekomi": "買い板はめこみ",
         "stop_sashene_care": "指値ケア反応悪く下振り懸念",
         "stop_ita_yowaku": "買い板弱くなる",
+        "stop_ue_kawanai": "上を買わなくなる",
+        "stop_yakan_pts": "夜間PTS",
+        "stop_mochikoshi": "持ち越し翌日売り",
     }
 
     counts = {label: 0 for label in reason_map.values()}

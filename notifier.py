@@ -13,7 +13,30 @@ LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
 
 def _get_line_config() -> dict:
     config = load_config()
-    return config.get("line", {})
+    line_cfg = config.get("line", {})
+
+    # Streamlit Cloud: st.secrets からも読み込む（config.yamlがgitignoreの場合）
+    try:
+        import streamlit as st
+        secrets = st.secrets.get("line", {})
+        if secrets:
+            # secrets の値で上書き（空文字でなければ）
+            for key in ("channel_access_token", "user_id", "channel_secret"):
+                val = secrets.get(key, "")
+                if val:
+                    line_cfg[key] = val
+    except Exception:
+        pass
+
+    return line_cfg
+
+
+_last_line_status = {"ok": None, "msg": ""}
+
+
+def get_last_line_status() -> dict:
+    """直近のLINE送信結果を返す"""
+    return _last_line_status
 
 
 def send_line(message: str) -> bool:
@@ -27,10 +50,14 @@ def send_line(message: str) -> bool:
     user_id = cfg.get("user_id", "")
 
     if not token:
-        print("[LINE] channel_access_token 未設定。config.yaml を確認してください。")
+        _last_line_status["ok"] = False
+        _last_line_status["msg"] = "channel_access_token 未設定。Streamlit Cloud の Secrets に line.channel_access_token を設定してください。"
+        print(f"[LINE] {_last_line_status['msg']}")
         return False
     if not user_id:
-        print("[LINE] user_id 未設定。config.yaml を確認してください。")
+        _last_line_status["ok"] = False
+        _last_line_status["msg"] = "user_id 未設定。Streamlit Cloud の Secrets に line.user_id を設定してください。"
+        print(f"[LINE] {_last_line_status['msg']}")
         return False
 
     headers = {
@@ -50,13 +77,19 @@ def send_line(message: str) -> bool:
             data=json.dumps(payload), timeout=10,
         )
         if resp.status_code == 200:
+            _last_line_status["ok"] = True
+            _last_line_status["msg"] = "送信成功"
             print("[LINE] 送信成功")
             return True
         else:
-            print(f"[LINE] 送信失敗: {resp.status_code} {resp.text}")
+            _last_line_status["ok"] = False
+            _last_line_status["msg"] = f"送信失敗: {resp.status_code} {resp.text}"
+            print(f"[LINE] {_last_line_status['msg']}")
             return False
     except requests.RequestException as e:
-        print(f"[LINE] 通信エラー: {e}")
+        _last_line_status["ok"] = False
+        _last_line_status["msg"] = f"通信エラー: {e}"
+        print(f"[LINE] {_last_line_status['msg']}")
         return False
 
 
