@@ -769,48 +769,49 @@ with tab8:
 
     # --- 環境チェック ---
     with st.expander("環境チェック", expanded=False):
-        env_c1, env_c2, env_c3 = st.columns(3)
-        with env_c1:
-            try:
-                import yfinance as _yf
-                st.success(f"yfinance: v{_yf.__version__}")
-            except ImportError:
-                st.error("yfinance: 未インストール")
-        with env_c2:
-            try:
-                from stock_api import test_connection
-                ok, msg = test_connection()
-                if ok:
-                    st.success(f"API接続: {msg}")
+        if st.button("環境チェック実行", key="env_check_btn"):
+            env_c1, env_c2, env_c3 = st.columns(3)
+            with env_c1:
+                try:
+                    import yfinance as _yf
+                    st.success(f"yfinance: v{_yf.__version__}")
+                except Exception:
+                    st.error("yfinance: 未インストール")
+            with env_c2:
+                try:
+                    from stock_api import test_connection as _tc
+                    _ok, _msg = _tc()
+                    if _ok:
+                        st.success(f"API接続: {_msg}")
+                    else:
+                        st.error(f"API接続: {_msg}")
+                except Exception:
+                    st.error("API接続チェック失敗")
+            with env_c3:
+                _line_cfg = config.get("line", {})
+                _has_token = bool(_line_cfg.get("channel_access_token", ""))
+                try:
+                    _secrets_line = st.secrets.get("line", {})
+                    if _secrets_line.get("channel_access_token", ""):
+                        _has_token = True
+                except Exception:
+                    pass
+                if _has_token:
+                    st.success("LINE: トークン設定済み")
                 else:
-                    st.error(f"API接続: {msg}")
-            except Exception as e:
-                st.error(f"API接続チェック失敗: {e}")
-        with env_c3:
-            _line_cfg = config.get("line", {})
-            _has_token = bool(_line_cfg.get("channel_access_token", ""))
-            try:
-                _secrets_line = st.secrets.get("line", {})
-                if _secrets_line.get("channel_access_token", ""):
-                    _has_token = True
-            except Exception:
-                pass
-            if _has_token:
-                st.success("LINE: トークン設定済み")
-            else:
-                st.error("LINE: トークン未設定（Secrets に line.channel_access_token を設定）")
+                    st.error("LINE: トークン未設定（Secrets に line.channel_access_token を設定）")
 
         if st.button("LINE通知テスト", key="line_test_btn"):
             try:
-                from notifier import send_line, get_last_line_status
-                test_ok = send_line("FUDO 監視パネル テスト通知")
-                status = get_last_line_status()
-                if test_ok:
+                from notifier import send_line as _sl, get_last_line_status as _gls
+                _test_ok = _sl("FUDO 監視パネル テスト通知")
+                _status = _gls()
+                if _test_ok:
                     st.success("LINE通知テスト成功")
                 else:
-                    st.error(f"LINE通知テスト失敗: {status['msg']}")
-            except Exception as e:
-                st.error(f"LINE通知モジュールエラー: {e}")
+                    st.error("LINE通知テスト失敗")
+            except Exception:
+                st.error("LINE通知モジュール読み込み失敗")
 
     # --- アラート ON/OFF トグル ---
     st.markdown("##### アラート設定")
