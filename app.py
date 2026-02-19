@@ -911,6 +911,7 @@ with tab8:
     # --- リアルタイム自動更新フラグメント ---
     @st.fragment(run_every=timedelta(seconds=rss_interval))
     def _monitor_fragment():
+      try:
         if not st.session_state.get("monitor_active"):
             st.info("証券コードを入力して「監視開始」を押してください。")
             return
@@ -1066,6 +1067,11 @@ with tab8:
                         st.caption("板データなし")
                 else:
                     st.caption("板データなし（無料APIでは板情報を取得できません）")
+
+      except Exception as _frag_err:
+        import traceback as _tb
+        st.error(f"監視パネルエラー: {type(_frag_err).__name__}: {_frag_err}")
+        st.code(_tb.format_exc())
 
     _monitor_fragment()
 
