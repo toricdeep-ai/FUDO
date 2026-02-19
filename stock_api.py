@@ -117,63 +117,66 @@ def get_prices(tickers: list[str]) -> list[dict]:
 def _fetch_yfinance(tickers: list[str]) -> dict[str, dict]:
     """yfinance でバルク取得する。
 
-    .T サフィックスで東証対応。
+    fast_info（高速・安定）を優先し、取得できない場合は history にフォールバック。
+    市場時間外でも前日終値を表示する。
     """
     result = {}
-    yf_symbols = [f"{t}.T" for t in tickers]
-    symbol_map = {f"{t}.T": t for t in tickers}
 
-    try:
-        # バルク取得（複数銘柄を1リクエストで）
-        data = yf.Tickers(" ".join(yf_symbols))
+    for t in tickers:
+        try:
+            tk = yf.Ticker(f"{t}.T")
+            price = 0.0
+            prev_close = 0.0
+            volume = 0
+            name = ""
 
-        for sym, ticker_code in symbol_map.items():
+            # --- fast_info で取得（最速・リアルタイム対応）---
             try:
-                info = data.tickers[sym].info
-                price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
-                prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose", 0)
-                change = round(price - prev_close, 1) if price and prev_close else 0
-                volume = info.get("volume") or info.get("regularMarketVolume", 0)
-                name = info.get("shortName") or info.get("longName", "")
+                fi = tk.fast_info
+                price = float(fi.last_price or 0)
+                prev_close = float(fi.previous_close or 0)
+                volume = int(fi.last_volume or 0)
+            except Exception:
+                pass
 
-                result[ticker_code] = {
-                    "ticker": ticker_code,
-                    "name": name,
-                    "price": price or 0,
-                    "change": change,
-                    "volume": int(volume) if volume else 0,
-                    "market_cap": 0,
-                    "taishaku": "",
-                    "timestamp": datetime.now().isoformat(),
-                }
-            except Exception as e:
-                print(f"[API] yfinance 個別エラー ({ticker_code}): {e}")
+            # --- fast_info で価格が取れなかった場合は history を使用 ---
+            if not price:
+                try:
+                    hist = tk.history(period="5d", interval="1d", timeout=10)
+                    if not hist.empty:
+                        price = float(hist["Close"].iloc[-1])
+                        prev_close = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
+                        volume = int(hist["Volume"].iloc[-1]) if "Volume" in hist.columns else 0
+                except Exception:
+                    pass
 
-    except Exception as e:
-        print(f"[API] yfinance バルク取得エラー: {e}")
-        # フォールバック: 1銘柄ずつ取得
-        for t in tickers:
+            # 価格が取れなかったらスキップ
+            if not price:
+                print(f"[API] 価格取得できず: {t}")
+                continue
+
+            # --- 銘柄名は info から取得（キャッシュあり） ---
             try:
-                tk = yf.Ticker(f"{t}.T")
                 info = tk.info
-                price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
-                prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose", 0)
-                change = round(price - prev_close, 1) if price and prev_close else 0
-                volume = info.get("volume") or info.get("regularMarketVolume", 0)
-                name = info.get("shortName") or info.get("longName", "")
+                name = info.get("shortName") or info.get("longName") or ""
+            except Exception:
+                name = ""
 
-                result[t] = {
-                    "ticker": t,
-                    "name": name,
-                    "price": price or 0,
-                    "change": change,
-                    "volume": int(volume) if volume else 0,
-                    "market_cap": 0,
-                    "taishaku": "",
-                    "timestamp": datetime.now().isoformat(),
-                }
-            except Exception as e2:
-                print(f"[API] yfinance フォールバックエラー ({t}): {e2}")
+            change = round(price - prev_close, 1) if prev_close else 0
+
+            result[t] = {
+                "ticker": t,
+                "name": name,
+                "price": price,
+                "change": change,
+                "volume": volume,
+                "market_cap": 0,
+                "taishaku": "",
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        except Exception as e:
+            print(f"[API] yfinance エラー ({t}): {e}")
 
     return result
 

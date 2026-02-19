@@ -118,7 +118,7 @@ with st.sidebar:
         st.rerun()
 
 # ===== メインエリア =====
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📋 ウォッチリスト",
     "📝 トレード記録",
     "📊 エントリー分析",
@@ -127,7 +127,6 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "📈 期待値計算",
     "📢 適時開示",
     "📡 監視パネル",
-    "📓 Notion連携",
 ])
 
 # --- タブ1: ウォッチリスト ---
@@ -936,7 +935,7 @@ with tab8:
             return
 
         if not prices:
-            st.warning("株価データを取得できませんでした。市場時間外か、APIに問題がある可能性があります。")
+            st.warning("株価データを取得できませんでした。証券コードが正しいか確認してください（例: 6920）。yfinance APIの制限の可能性もあります。")
             return
 
         price_map = {p["ticker"]: p for p in prices}
@@ -1075,79 +1074,3 @@ with tab8:
 
     _monitor_fragment()
 
-# --- タブ9: Notion連携 ---
-with tab9:
-    st.subheader("Notion連携")
-
-    notion_cfg = config.get("notion", {})
-    has_notion_key = bool(notion_cfg.get("api_key", ""))
-    has_notion_db = bool(notion_cfg.get("database_id", ""))
-    try:
-        _secrets_notion = st.secrets.get("notion", {})
-        if _secrets_notion.get("api_key", ""):
-            has_notion_key = True
-        if _secrets_notion.get("database_id", ""):
-            has_notion_db = True
-    except Exception:
-        pass
-
-    if not has_notion_key or not has_notion_db:
-        st.warning("Notion API キーまたはデータベースIDが未設定です。Streamlit Cloud の Secrets に以下を設定してください。")
-        st.code("""[notion]
-api_key = "your-notion-api-key"
-database_id = "your-database-id\"""")
-    else:
-        st.success("Notion: 設定済み")
-
-    st.markdown("---")
-
-    # ウォッチリスト → Notion
-    st.markdown("##### ウォッチリスト → Notion に同期")
-    nc1, nc2 = st.columns(2)
-    with nc1:
-        notion_sync_date = st.date_input("対象日付", value=today_jst(), key="notion_sync_date")
-    with nc2:
-        st.write("")
-        st.write("")
-        notion_sync_all = st.checkbox("全日付を同期", key="notion_sync_all")
-
-    if st.button("Notionに同期", key="notion_push_btn", type="primary"):
-        if not has_notion_key or not has_notion_db:
-            st.error("Notion API キーとデータベースIDを設定してください。")
-        else:
-            with st.spinner("Notion に同期中..."):
-                try:
-                    from notion_sync import push_to_notion
-                    target_date = None if notion_sync_all else str(notion_sync_date)
-                    sync_stocks = db.get_stocks(target_date)
-                    if not sync_stocks:
-                        st.info("同期対象の銘柄がありません。")
-                    else:
-                        success = 0
-                        for stock in sync_stocks:
-                            result = push_to_notion(stock)
-                            if result:
-                                success += 1
-                        st.success(f"Notion同期完了: {success}/{len(sync_stocks)} 件")
-                except Exception as e:
-                    st.error(f"Notion同期エラー: {e}")
-
-    # Notion → 確認
-    st.markdown("---")
-    st.markdown("##### Notion からデータ確認")
-    if st.button("Notionから取得", key="notion_fetch_btn"):
-        if not has_notion_key or not has_notion_db:
-            st.error("Notion API キーとデータベースIDを設定してください。")
-        else:
-            with st.spinner("Notion からデータ取得中..."):
-                try:
-                    from notion_sync import fetch_from_notion
-                    notion_data = fetch_from_notion()
-                    if notion_data:
-                        df_notion = pd.DataFrame(notion_data)
-                        st.dataframe(df_notion, use_container_width=True, hide_index=True)
-                        st.caption(f"取得件数: {len(notion_data)}件")
-                    else:
-                        st.info("Notionにデータがないか、取得に失敗しました。")
-                except Exception as e:
-                    st.error(f"Notion取得エラー: {e}")
