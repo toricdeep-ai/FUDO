@@ -976,13 +976,16 @@ with tab8:
                 st.warning(f"節目アラートエラー: {e}")
 
         # LINE通知ステータス表示
-        from notifier import get_last_line_status
-        _line_st = get_last_line_status()
-        if _line_st["ok"] is not None:
-            if _line_st["ok"]:
-                st.caption(f"LINE: {_line_st['msg']}")
-            else:
-                st.warning(f"LINE通知エラー: {_line_st['msg']}")
+        try:
+            from notifier import get_last_line_status as _get_line_st
+            _line_st = _get_line_st()
+            if _line_st["ok"] is not None:
+                if _line_st["ok"]:
+                    st.caption(f"LINE: {_line_st['msg']}")
+                else:
+                    st.warning(f"LINE通知エラー: {_line_st['msg']}")
+        except Exception:
+            pass
 
         st.success(f"取得成功: {len(prices)}/{len(tickers)} 銘柄")
 
