@@ -1024,48 +1024,6 @@ with tab8:
                     unsafe_allow_html=True,
                 )
 
-                board = get_rss_board(ticker)
-                if board:
-                    sell_list = board["sell"]
-                    buy_list = board["buy"]
-
-                    rows_html = []
-                    for s in sell_list:
-                        if s["price"] > 0:
-                            rows_html.append(
-                                f"<tr>"
-                                f"<td style='text-align:right; color:#1e88e5'>{s['volume']:,}</td>"
-                                f"<td style='text-align:center; font-weight:bold'>{s['price']:,.0f}</td>"
-                                f"<td></td>"
-                                f"</tr>"
-                            )
-
-                    for b in buy_list:
-                        if b["price"] > 0:
-                            rows_html.append(
-                                f"<tr>"
-                                f"<td></td>"
-                                f"<td style='text-align:center; font-weight:bold'>{b['price']:,.0f}</td>"
-                                f"<td style='text-align:right; color:#e53935'>{b['volume']:,}</td>"
-                                f"</tr>"
-                            )
-
-                    if rows_html:
-                        table_html = (
-                            "<table style='width:400px; border-collapse:collapse; font-size:14px'>"
-                            "<thead><tr>"
-                            "<th style='text-align:right; padding:4px 8px; border-bottom:2px solid #ccc'>売数量</th>"
-                            "<th style='text-align:center; padding:4px 8px; border-bottom:2px solid #ccc'>価格</th>"
-                            "<th style='text-align:right; padding:4px 8px; border-bottom:2px solid #ccc'>買数量</th>"
-                            "</tr></thead><tbody>"
-                            + "\n".join(rows_html)
-                            + "</tbody></table>"
-                        )
-                        st.markdown(table_html, unsafe_allow_html=True)
-                    else:
-                        st.caption("板データなし")
-                else:
-                    st.caption("板データなし（無料APIでは板情報を取得できません）")
 
       except Exception as _frag_err:
         import traceback as _tb
