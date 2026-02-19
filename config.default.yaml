@@ -71,9 +71,6 @@ line:
   notify_on_grade_change: true
   notify_on_price_alert: true
 
-discord:
-  webhook_url: ""
-
 data_fetch:
   kabutan_base_url: "https://kabutan.jp"
   prtimes_base_url: "https://prtimes.jp"

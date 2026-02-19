@@ -16,14 +16,28 @@ NOTION_VERSION = "2022-06-28"
 
 def _get_notion_config() -> dict:
     config = load_config()
-    return config.get("notion", {})
+    notion_cfg = config.get("notion", {})
+
+    # Streamlit Cloud: st.secrets からも読み込む（config.yamlがgitignoreの場合）
+    try:
+        import streamlit as st
+        secrets = st.secrets.get("notion", {})
+        if secrets:
+            for key in ("api_key", "database_id"):
+                val = secrets.get(key, "")
+                if val:
+                    notion_cfg[key] = val
+    except Exception:
+        pass
+
+    return notion_cfg
 
 
 def _headers() -> dict:
     cfg = _get_notion_config()
     api_key = cfg.get("api_key", "")
     if not api_key:
-        raise ValueError("Notion API キーが未設定です。config.yaml の notion.api_key を設定してください。")
+        raise ValueError("Notion API キーが未設定です。Streamlit Cloud の Secrets に notion.api_key を設定してください。")
     return {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

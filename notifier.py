@@ -1,4 +1,4 @@
-"""FUDO - LINE Messaging API + Discord notification module."""
+"""FUDO - LINE Messaging API notification module."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import json
 
 import requests
 from analytics import load_config
-from discord_notify import send_discord
 
 LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
 
@@ -94,9 +93,8 @@ def send_line(message: str) -> bool:
 
 
 def _send_all(message: str):
-    """LINE + Discord both."""
+    """LINEに送信する"""
     send_line(message)
-    send_discord(message)
 
 
 def notify_grade_change(name: str, ticker: str, old_grade: str, new_grade: str):

@@ -811,6 +811,17 @@ with tab8:
                 else:
                     st.error("LINE: トークン未設定（Secrets に line.channel_access_token を設定）")
 
+            env_c4, = st.columns(1)
+            with env_c4:
+                try:
+                    from cloud_storage import is_configured as _cs_ok
+                    if _cs_ok():
+                        st.success("GitHub backup: 設定済み（データ永続化ON）")
+                    else:
+                        st.warning("GitHub backup: 未設定 — Secrets に [github] token / repo を設定するとデータが永続化されます")
+                except Exception:
+                    st.error("cloud_storage 読み込み失敗")
+
         if st.button("LINE通知テスト", key="line_test_btn"):
             try:
                 from notifier import send_line as _sl, get_last_line_status as _gls
@@ -1062,13 +1073,20 @@ with tab9:
     notion_cfg = config.get("notion", {})
     has_notion_key = bool(notion_cfg.get("api_key", ""))
     has_notion_db = bool(notion_cfg.get("database_id", ""))
+    try:
+        _secrets_notion = st.secrets.get("notion", {})
+        if _secrets_notion.get("api_key", ""):
+            has_notion_key = True
+        if _secrets_notion.get("database_id", ""):
+            has_notion_db = True
+    except Exception:
+        pass
 
     if not has_notion_key or not has_notion_db:
-        st.warning("Notion API キーまたはデータベースIDが未設定です。config.yaml の notion セクションを設定してください。")
-        st.code("""notion:
-  api_key: "your-notion-api-key"
-  database_id: "your-database-id"
-  sync_interval: 300""")
+        st.warning("Notion API キーまたはデータベースIDが未設定です。Streamlit Cloud の Secrets に以下を設定してください。")
+        st.code("""[notion]
+api_key = "your-notion-api-key"
+database_id = "your-database-id\"""")
     else:
         st.success("Notion: 設定済み")
 

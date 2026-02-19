@@ -278,14 +278,14 @@ def fetch_kabutan_taishaku_new() -> list[dict]:
 
             company_name = tds[2].get_text(strip=True)
 
-            # Market cap check
+            # Market cap check（取得できない場合は除外しない）
             cap = _get_market_cap_cached(ticker)
-            if cap is None or cap > cap_max:
+            if cap is not None and cap > cap_max:
                 continue
 
-            # Volume check
+            # Volume check（取得できない場合は除外しない）
             vol = fetch_kabutan_volume(ticker)
-            if vol is None or vol < vol_min:
+            if vol is not None and vol < vol_min:
                 continue
 
             today = datetime.now().strftime("%Y-%m-%d")
@@ -486,9 +486,9 @@ def fetch_kabutan_disclosures(max_pages: int = None) -> list[dict]:
                 # 種別
                 disclosure_type = tds[4].get_text(strip=True) if len(tds) > 5 else ""
 
-                # 時価総額チェック
+                # 時価総額チェック（取得できない場合は除外しない）
                 cap = _get_market_cap_cached(ticker)
-                if cap is None or cap > cap_max:
+                if cap is not None and cap > cap_max:
                     continue
 
                 # 開示日時を構築
