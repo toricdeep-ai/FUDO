@@ -58,6 +58,7 @@ def fetch_kabutan_rising_stocks(
     vol_min: int = 1_000_000,
     cap_max: float = 10_000_000_000,
     top_n: int = 50,
+    taishaku_only: bool = True,
 ) -> list[dict]:
     """kabutan.jp 値上がり率ランキングから条件に合う銘柄を取得する。
 
@@ -165,7 +166,7 @@ def fetch_kabutan_rising_stocks(
             cap = _get_market_cap_cached(c["ticker"])
             if cap is not None and cap > cap_max:
                 continue
-            if not _is_taishaku_cached(c["ticker"]):
+            if taishaku_only and not _is_taishaku_cached(c["ticker"]):
                 continue
             c["market_cap"] = cap
             results.append(c)

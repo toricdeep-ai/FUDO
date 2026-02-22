@@ -751,13 +751,26 @@ with tab7:
 # --- タブ8: 値上がり監視 ---
 with tab8:
     st.subheader("値上がり率ランキング監視")
-    st.caption("条件: 貸借銘柄 / 時価総額100億以下 / 出来高100万株以上 / 前日比+5%以上")
 
-    rk_c1, rk_c2 = st.columns(2)
-    with rk_c1:
-        rk_pct_min = st.number_input("前日比 下限（%）", value=5.0, min_value=1.0, max_value=30.0, step=0.5, key="rk_pct_min")
-    with rk_c2:
-        rk_interval = st.number_input("更新間隔（秒）", value=120, min_value=60, max_value=600, step=30, key="rk_interval")
+    # --- 条件設定 ---
+    with st.expander("📋 フィルター条件", expanded=True):
+        rk_col1, rk_col2, rk_col3 = st.columns(3)
+        with rk_col1:
+            rk_pct_min = st.number_input("前日比 下限（%）", value=5.0, min_value=1.0, max_value=30.0, step=0.5, key="rk_pct_min")
+            rk_vol_min = st.number_input("出来高 下限（万株）", value=100, min_value=1, max_value=10000, step=10, key="rk_vol_min")
+        with rk_col2:
+            rk_cap_max = st.number_input("時価総額 上限（億円）", value=100, min_value=10, max_value=1000, step=10, key="rk_cap_max")
+            rk_top_n = st.number_input("取得上位件数", value=50, min_value=10, max_value=200, step=10, key="rk_top_n")
+        with rk_col3:
+            rk_taishaku_only = st.checkbox("貸借銘柄のみ", value=True, key="rk_taishaku_only")
+            rk_line_notify = st.checkbox("LINE通知ON", value=True, key="rk_line_notify")
+
+    st.caption(
+        f"現在の条件: 前日比+{st.session_state.get('rk_pct_min', 5.0):.1f}%以上 / "
+        f"出来高{st.session_state.get('rk_vol_min', 100)}万株以上 / "
+        f"時価総額{st.session_state.get('rk_cap_max', 100)}億以下 / "
+        f"{'貸借銘柄のみ' if st.session_state.get('rk_taishaku_only', True) else '全銘柄'}"
+    )
 
     @st.fragment(run_every=timedelta(seconds=120))
     def _ranking_fragment():
@@ -768,35 +781,46 @@ with tab8:
             now_jst = datetime.now(JST)
             st.caption(f"自動スキャン中（2分間隔）　最終更新: {now_jst.strftime('%H:%M:%S')}")
 
-            pct_min = st.session_state.get("rk_pct_min", 5.0)
-            hits = fetch_kabutan_rising_stocks(pct_min=pct_min)
+            pct_min      = st.session_state.get("rk_pct_min", 5.0)
+            vol_min      = int(st.session_state.get("rk_vol_min", 100)) * 10_000
+            cap_max      = int(st.session_state.get("rk_cap_max", 100)) * 100_000_000
+            top_n        = int(st.session_state.get("rk_top_n", 50))
+            taishaku_only = st.session_state.get("rk_taishaku_only", True)
+            line_notify  = st.session_state.get("rk_line_notify", True)
+
+            hits = fetch_kabutan_rising_stocks(
+                pct_min=pct_min,
+                vol_min=vol_min,
+                cap_max=cap_max,
+                top_n=top_n,
+                taishaku_only=taishaku_only,
+            )
 
             if hits:
                 # 未通知のものだけLINE通知
-                notified = st.session_state.get("rk_notified", set())
-                new_hits = [h for h in hits if h["ticker"] not in notified]
-
-                if new_hits:
-                    lines = [f"【値上がり監視HIT】{len(new_hits)}件"]
-                    for h in new_hits:
-                        cap_str = f"{h['market_cap'] / 100_000_000:.0f}億" if h.get("market_cap") else "不明"
-                        lines.append(
-                            f"{h['name']}（{h['ticker']}）"
-                            f" +{h['change_pct']:.1f}%"
-                            f" 出来高{h['volume'] // 10000}万株"
-                            f" 時価総額{cap_str}"
-                        )
-                    try:
-                        _send_line("\n".join(lines))
+                if line_notify:
+                    notified = st.session_state.get("rk_notified", set())
+                    new_hits = [h for h in hits if h["ticker"] not in notified]
+                    if new_hits:
+                        lines = [f"【値上がり監視HIT】{len(new_hits)}件"]
                         for h in new_hits:
-                            notified.add(h["ticker"])
-                        st.session_state["rk_notified"] = notified
-                        st.success(f"LINE通知送信: {len(new_hits)}件")
-                    except Exception as _le:
-                        st.warning(f"LINE通知エラー: {_le}")
+                            cap_str = f"{h['market_cap'] / 100_000_000:.0f}億" if h.get("market_cap") else "不明"
+                            lines.append(
+                                f"{h['name']}（{h['ticker']}）"
+                                f" +{h['change_pct']:.1f}%"
+                                f" 出来高{h['volume'] // 10000}万株"
+                                f" 時価総額{cap_str}"
+                            )
+                        try:
+                            _send_line("\n".join(lines))
+                            for h in new_hits:
+                                notified.add(h["ticker"])
+                            st.session_state["rk_notified"] = notified
+                            st.success(f"LINE通知送信: {len(new_hits)}件")
+                        except Exception as _le:
+                            st.warning(f"LINE通知エラー: {_le}")
 
                 # テーブル表示
-                import pandas as pd
                 df_rk = pd.DataFrame(hits)
                 col_map = {
                     "ticker": "コード", "name": "銘柄名",
