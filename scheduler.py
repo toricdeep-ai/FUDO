@@ -12,7 +12,8 @@ import schedule
 from analytics import load_config
 from notifier import notify_watchlist_summary, notify_disclosures, notify_taishaku_new
 from notion_sync import sync_all_to_notion
-from data_fetch import fetch_tdnet_disclosures, fetch_kabutan_taishaku_new
+from tdnet_fetch import fetch_tdnet_disclosures
+from data_fetch import fetch_kabutan_taishaku_new
 import database as db
 
 

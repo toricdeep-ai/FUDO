@@ -675,7 +675,7 @@ with tab7:
     @st.fragment(run_every=timedelta(seconds=5))
     def _tdnet_fragment():
         try:
-            from data_fetch import fetch_tdnet_disclosures
+            from tdnet_fetch import fetch_tdnet_disclosures
             from notifier import notify_disclosures as _notify_disc
 
             now_jst = datetime.now(JST)
