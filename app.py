@@ -111,7 +111,7 @@ with st.sidebar:
         st.rerun()
 
 # ===== メインエリア =====
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📋 ウォッチリスト",
     "📝 トレード記録",
     "📊 エントリー分析",
@@ -119,6 +119,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🧮 ロット計算",
     "📈 期待値計算",
     "📡 TDnet監視",
+    "🚀 値上がり監視",
 ])
 
 # --- タブ1: ウォッチリスト ---
@@ -746,5 +747,85 @@ with tab7:
             st.code(_tb.format_exc())
 
     _tdnet_fragment()
+
+# --- タブ8: 値上がり監視 ---
+with tab8:
+    st.subheader("値上がり率ランキング監視")
+    st.caption("条件: 貸借銘柄 / 時価総額100億以下 / 出来高100万株以上 / 前日比+5%以上")
+
+    rk_c1, rk_c2 = st.columns(2)
+    with rk_c1:
+        rk_pct_min = st.number_input("前日比 下限（%）", value=5.0, min_value=1.0, max_value=30.0, step=0.5, key="rk_pct_min")
+    with rk_c2:
+        rk_interval = st.number_input("更新間隔（秒）", value=120, min_value=60, max_value=600, step=30, key="rk_interval")
+
+    @st.fragment(run_every=timedelta(seconds=120))
+    def _ranking_fragment():
+        try:
+            from ranking_monitor import fetch_kabutan_rising_stocks
+            from notifier import send_line as _send_line
+
+            now_jst = datetime.now(JST)
+            st.caption(f"自動スキャン中（2分間隔）　最終更新: {now_jst.strftime('%H:%M:%S')}")
+
+            pct_min = st.session_state.get("rk_pct_min", 5.0)
+            hits = fetch_kabutan_rising_stocks(pct_min=pct_min)
+
+            if hits:
+                # 未通知のものだけLINE通知
+                notified = st.session_state.get("rk_notified", set())
+                new_hits = [h for h in hits if h["ticker"] not in notified]
+
+                if new_hits:
+                    lines = [f"【値上がり監視HIT】{len(new_hits)}件"]
+                    for h in new_hits:
+                        cap_str = f"{h['market_cap'] / 100_000_000:.0f}億" if h.get("market_cap") else "不明"
+                        lines.append(
+                            f"{h['name']}（{h['ticker']}）"
+                            f" +{h['change_pct']:.1f}%"
+                            f" 出来高{h['volume'] // 10000}万株"
+                            f" 時価総額{cap_str}"
+                        )
+                    try:
+                        _send_line("\n".join(lines))
+                        for h in new_hits:
+                            notified.add(h["ticker"])
+                        st.session_state["rk_notified"] = notified
+                        st.success(f"LINE通知送信: {len(new_hits)}件")
+                    except Exception as _le:
+                        st.warning(f"LINE通知エラー: {_le}")
+
+                # テーブル表示
+                import pandas as pd
+                df_rk = pd.DataFrame(hits)
+                col_map = {
+                    "ticker": "コード", "name": "銘柄名",
+                    "price": "現在値", "change_pct": "前日比%",
+                    "volume": "出来高", "market_cap": "時価総額",
+                }
+                df_show = df_rk[[c for c in col_map if c in df_rk.columns]].rename(columns=col_map)
+                if "時価総額" in df_show.columns:
+                    df_show["時価総額"] = df_show["時価総額"].apply(
+                        lambda x: f"{x / 100_000_000:.0f}億" if x else "不明"
+                    )
+                if "出来高" in df_show.columns:
+                    df_show["出来高"] = df_show["出来高"].apply(lambda x: f"{x // 10000}万株")
+                if "前日比%" in df_show.columns:
+                    df_show["前日比%"] = df_show["前日比%"].apply(lambda x: f"+{x:.1f}%")
+                st.dataframe(df_show, use_container_width=True, hide_index=True)
+                st.caption(f"HIT件数: {len(hits)}件")
+            else:
+                st.info("現在、条件に合う銘柄はありません。")
+
+            if st.button("通知履歴をリセット", key="rk_reset"):
+                st.session_state["rk_notified"] = set()
+                st.success("通知履歴をリセットしました")
+
+        except Exception as _err:
+            import traceback as _tb
+            st.error(f"値上がり監視エラー: {_err}")
+            st.code(_tb.format_exc())
+
+    _ranking_fragment()
 
 
