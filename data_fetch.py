@@ -517,6 +517,108 @@ def fetch_kabutan_disclosures(max_pages: int = None) -> list[dict]:
     return results
 
 
+def fetch_tdnet_disclosures(target_date: str | None = None) -> list[dict]:
+    """TDnet（適時開示情報閲覧サービス）から当日の開示一覧を取得し、
+    時価総額100億以下の銘柄のみ返す。
+
+    Args:
+        target_date: 取得対象日（YYYYMMDD形式。Noneなら当日）
+
+    Returns:
+        [{"ticker", "company_name", "title", "disclosed_at", "url",
+          "market_cap", "source"}, ...]
+    """
+    config = load_config()
+    disc_cfg = config.get("disclosure", {})
+    cap_max = disc_cfg.get("market_cap_max", 10_000_000_000)
+
+    if target_date is None:
+        target_date = datetime.now().strftime("%Y%m%d")
+
+    url = f"https://www.release.tdnet.info/inbs/I_list_001_{target_date}.html"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.encoding = "utf-8"
+        if resp.status_code != 200:
+            print(f"[TDnet] HTTP {resp.status_code}: {url}")
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        results = []
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        # TDnetの開示一覧テーブルを解析
+        table = soup.select_one("table#main-list-table") or soup.select_one("table.listbox")
+        if table is None:
+            # テーブルが特定できない場合はすべてのtrを対象に
+            rows = soup.select("tr")
+        else:
+            rows = table.select("tr")
+
+        for tr in rows:
+            tds = tr.select("td")
+            if len(tds) < 3:
+                continue
+
+            # 開示時刻（例: "09:00"）
+            time_text = tds[0].get_text(strip=True)
+            if not re.match(r"\d{2}:\d{2}", time_text):
+                continue
+
+            # 証券コード（4桁）
+            code_text = tds[1].get_text(strip=True)
+            ticker = re.sub(r"\D", "", code_text)
+            if not re.match(r"^\d{4}$", ticker):
+                continue
+
+            # 会社名
+            company_name = tds[2].get_text(strip=True) if len(tds) > 2 else ""
+
+            # タイトルとURL
+            title = ""
+            pdf_url = ""
+            if len(tds) > 3:
+                title_tag = tds[3].select_one("a") or tds[-1].select_one("a")
+                if title_tag:
+                    title = title_tag.get_text(strip=True)
+                    href = title_tag.get("href", "")
+                    if href:
+                        if not href.startswith("http"):
+                            href = f"https://www.release.tdnet.info{href}"
+                        pdf_url = href
+                else:
+                    title = tds[3].get_text(strip=True)
+
+            if not title:
+                continue
+
+            # 時価総額チェック
+            cap = _get_market_cap_cached(ticker)
+            if cap is not None and cap > cap_max:
+                continue
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "market": "",
+                "disclosure_type": "",
+                "title": title,
+                "url": pdf_url,
+                "disclosed_at": f"{today_str} {time_text}",
+                "market_cap": cap,
+                "source": "tdnet",
+            })
+
+        time.sleep(_request_interval())
+        print(f"[TDnet] {len(results)}件取得（時価総額{cap_max / 100_000_000:.0f}億以下）")
+        return results
+
+    except Exception as e:
+        print(f"[TDnet] スクレイプエラー: {e}")
+        return []
+
+
 def fetch_prtimes_latest(max_pages: int = None) -> list[dict]:
     """PRTimesトップページから最新プレスリリースを取得し、
     証券コードを含むリリースで時価総額100億以下の銘柄のみ返す。

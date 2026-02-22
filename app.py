@@ -19,14 +19,7 @@ try:
         calc_entry_type_stats, calc_stop_reason_stats, calc_quality_stats,
         calc_trade_statistics, load_config,
     )
-    try:
-        from rss_monitor import get_rss_prices, get_rss_board, check_surge_alerts, check_price_alerts, check_fushi_alerts
-    except Exception:
-        get_rss_prices = None
-        get_rss_board = None
-        check_surge_alerts = None
-        check_price_alerts = None
-        check_fushi_alerts = None
+    pass
 except Exception as e:
     st.error(f"Import error: {e}")
     import traceback
@@ -75,7 +68,7 @@ with st.sidebar:
         input_margin = st.slider("信用買残（%）", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
         input_fushi = st.text_input("節目（例: 1500, 1450）")
         input_pts = st.slider("PTS出来高", min_value=0, max_value=1000000, value=0, step=100)
-        input_prev_sell_vol = st.number_input("前日売り総量", min_value=0, step=100, key="input_prev_sell_vol")
+        input_prev_sell_vol = st.number_input("前日売り総量（万株単位）", min_value=0, step=10000, key="input_prev_sell_vol")
         input_disclosure = st.number_input("日々公表カウント", min_value=0, max_value=3, step=1)
         input_mashitanpo = st.selectbox("増し担保規制", ["なし", "あり"])
         input_hiduke = st.checkbox("日足位置が良い")
@@ -118,29 +111,32 @@ with st.sidebar:
         st.rerun()
 
 # ===== メインエリア =====
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📋 ウォッチリスト",
     "📝 トレード記録",
     "📊 エントリー分析",
     "🔬 統計",
     "🧮 ロット計算",
     "📈 期待値計算",
-    "📢 適時開示",
-    "📡 監視パネル",
+    "📡 TDnet監視",
 ])
 
 # --- タブ1: ウォッチリスト ---
 with tab1:
+    def _on_date_change():
+        st.session_state["wl_show_all"] = False
+
     col_date, col_refresh = st.columns([3, 1])
     with col_date:
-        filter_date = st.date_input("日付フィルタ", value=today_jst(), key="filter_date")
+        filter_date = st.date_input("日付フィルタ", value=today_jst(), key="filter_date", on_change=_on_date_change)
     with col_refresh:
         st.write("")
         st.write("")
         if st.button("全件表示"):
-            filter_date = None
+            st.session_state["wl_show_all"] = True
 
-    stocks = db.get_stocks(str(filter_date) if filter_date else None)
+    show_all = st.session_state.get("wl_show_all", False)
+    stocks = db.get_stocks(None if show_all else str(filter_date))
 
     if stocks:
         df = pd.DataFrame(stocks)
@@ -671,364 +667,84 @@ with tab6:
         else:
             st.warning("期待値はマイナスです。ルールの見直しを検討してください。")
 
-# --- タブ7: 適時開示 ---
+# --- タブ7: TDnet監視 ---
 with tab7:
-    st.subheader("適時開示一覧（時価総額100億以下）")
+    st.subheader("TDnet適時開示監視（時価総額100億以下）")
 
-    # データ取得ボタン
-    disc_btn_c1, disc_btn_c2, _ = st.columns([1, 1, 2])
-    with disc_btn_c1:
-        if st.button("株探から取得", key="fetch_kabutan_disc", type="primary"):
-            with st.spinner("株探から適時開示を取得中..."):
-                try:
-                    from data_fetch import fetch_kabutan_disclosures
-                    new_items = fetch_kabutan_disclosures()
-                    added = 0
-                    for item in new_items:
-                        result = db.add_disclosure(item)
-                        if result is not None:
-                            added += 1
-                    st.success(f"株探: {len(new_items)}件取得、{added}件新規追加")
-                except Exception as e:
-                    st.error(f"株探取得エラー: {e}")
-    with disc_btn_c2:
-        if st.button("PRTimesから取得", key="fetch_prtimes_disc"):
-            with st.spinner("PRTimesから取得中..."):
-                try:
-                    from data_fetch import fetch_prtimes_latest
-                    new_items = fetch_prtimes_latest()
-                    added = 0
-                    for item in new_items:
-                        result = db.add_disclosure(item)
-                        if result is not None:
-                            added += 1
-                    st.success(f"PRTimes: {len(new_items)}件取得、{added}件新規追加")
-                except Exception as e:
-                    st.error(f"PRTimes取得エラー: {e}")
-
-    # フィルタ
-    fc1, fc2, fc3 = st.columns(3)
-    with fc1:
-        disc_date = st.date_input("日付フィルタ", value=today_jst(), key="disc_date")
-    with fc2:
-        disc_source = st.selectbox("ソース", ["すべて", "kabutan", "prtimes"], key="disc_source")
-    with fc3:
-        disc_cap_filter = st.number_input(
-            "時価総額上限（億円）", value=100, min_value=1, step=10, key="disc_cap_filter"
-        )
-
-    source_filter = disc_source if disc_source != "すべて" else None
-    disclosures = db.get_disclosures(source=source_filter, target_date=str(disc_date))
-
-    # 時価総額フィルタ適用
-    cap_filter_yen = disc_cap_filter * 100_000_000
-    disclosures = [d for d in disclosures if d.get("market_cap") and d["market_cap"] <= cap_filter_yen]
-
-    if disclosures:
-        df_disc = pd.DataFrame(disclosures)
-        disc_cols = {
-            "id": "ID",
-            "ticker": "コード",
-            "company_name": "会社名",
-            "market": "市場",
-            "disclosure_type": "種別",
-            "title": "タイトル",
-            "disclosed_at": "開示日時",
-            "market_cap": "時価総額",
-            "source": "ソース",
-            "notified": "通知済",
-        }
-        df_disc_show = df_disc[[c for c in disc_cols if c in df_disc.columns]].rename(columns=disc_cols)
-
-        if "時価総額" in df_disc_show.columns:
-            df_disc_show["時価総額"] = df_disc_show["時価総額"].apply(
-                lambda x: f"{x / 100_000_000:.0f}億" if pd.notna(x) and x else ""
-            )
-        if "通知済" in df_disc_show.columns:
-            df_disc_show["通知済"] = df_disc_show["通知済"].apply(lambda x: "✓" if x else "")
-
-        st.dataframe(df_disc_show, use_container_width=True, hide_index=True)
-
-        # ウォッチリストに追加
-        with st.expander("ウォッチリストに追加"):
-            add_disc_id = st.number_input("開示ID", min_value=1, step=1, key="add_disc_id")
-            if st.button("ウォッチリストに追加", key="add_disc_to_wl"):
-                target = next((d for d in disclosures if d["id"] == add_disc_id), None)
-                if target:
-                    stock_id = db.add_stock({
-                        "date": str(today_jst()),
-                        "name": target["company_name"],
-                        "ticker": target["ticker"],
-                        "market_cap": target.get("market_cap"),
-                        "memo": f"適時開示: {target.get('title', '')}",
-                    })
-                    st.success(f"{target['company_name']}（{target['ticker']}）をウォッチリストに追加しました（ID: {stock_id}）")
-                else:
-                    st.error("指定されたIDの開示が見つかりません")
-
-        st.caption(f"表示件数: {len(disclosures)}件")
-    else:
-        st.info("該当する適時開示はありません。上の「株探から取得」ボタンでデータを取得してください。")
-
-# --- タブ8: 監視パネル ---
-rss_interval = config.get("api", {}).get("update_interval", 60)
-
-with tab8:
-    st.subheader("リアルタイム監視パネル")
-
-    # --- 環境チェック ---
-    with st.expander("環境チェック", expanded=False):
-        if st.button("環境チェック実行", key="env_check_btn"):
-            env_c1, env_c2, env_c3 = st.columns(3)
-            with env_c1:
-                try:
-                    import yfinance as _yf
-                    st.success(f"yfinance: v{_yf.__version__}")
-                except Exception:
-                    st.error("yfinance: 未インストール")
-            with env_c2:
-                try:
-                    from stock_api import test_connection as _tc
-                    _ok, _msg = _tc()
-                    if _ok:
-                        st.success(f"API接続: {_msg}")
-                    else:
-                        st.error(f"API接続: {_msg}")
-                except Exception:
-                    st.error("API接続チェック失敗")
-            with env_c3:
-                _line_cfg = config.get("line", {})
-                _has_token = bool(_line_cfg.get("channel_access_token", ""))
-                try:
-                    _secrets_line = st.secrets.get("line", {})
-                    if _secrets_line.get("channel_access_token", ""):
-                        _has_token = True
-                except Exception:
-                    pass
-                if _has_token:
-                    st.success("LINE: トークン設定済み")
-                else:
-                    st.error("LINE: トークン未設定（Secrets に line.channel_access_token を設定）")
-
-            env_c4, = st.columns(1)
-            with env_c4:
-                try:
-                    from cloud_storage import is_configured as _cs_ok
-                    if _cs_ok():
-                        st.success("GitHub backup: 設定済み（データ永続化ON）")
-                    else:
-                        st.warning("GitHub backup: 未設定 — Secrets に [github] token / repo を設定するとデータが永続化されます")
-                except Exception:
-                    st.error("cloud_storage 読み込み失敗")
-
-        if st.button("LINE通知テスト", key="line_test_btn"):
-            try:
-                from notifier import send_line as _sl, get_last_line_status as _gls
-                _test_ok = _sl("FUDO 監視パネル テスト通知")
-                _status = _gls()
-                if _test_ok:
-                    st.success("LINE通知テスト成功")
-                else:
-                    st.error("LINE通知テスト失敗")
-            except Exception:
-                st.error("LINE通知モジュール読み込み失敗")
-
-    # --- アラート ON/OFF トグル ---
-    st.markdown("##### アラート設定")
-    al_c1, al_c2, al_c3, al_c4 = st.columns(4)
-    with al_c1:
-        alert_screen = st.toggle(
-            "スクリーニング通知",
-            value=st.session_state.get("alert_screen", True),
-            key="alert_screen",
-            help="貸借 / 時価総額100億以下 / 出来高100万以上",
-        )
-    with al_c2:
-        alert_surge = st.toggle(
-            "急騰アラート",
-            value=st.session_state.get("alert_surge", True),
-            key="alert_surge",
-            help="3分間+4%以上の急騰を検出",
-        )
-    with al_c3:
-        alert_price = st.toggle(
-            "価格アラート",
-            value=st.session_state.get("alert_price", True),
-            key="alert_price",
-            help="指定株価到達 / 出来高急増",
-        )
-    with al_c4:
-        alert_fushi = st.toggle(
-            "節目アラート",
-            value=st.session_state.get("alert_fushi", True),
-            key="alert_fushi",
-            help="登録節目の±0.5%圏内で通知",
-        )
-
-    st.markdown("---")
-
-    monitor_input = st.text_area(
-        "証券コードを入力（カンマ or 改行区切り）",
-        placeholder="例: 6920, 3856\nまたは1行ずつ入力",
-        height=100,
-        key="monitor_tickers",
-    )
-
-    mc1, mc2 = st.columns([1, 3])
-    with mc1:
-        monitor_start = st.button("監視開始", key="monitor_start", type="primary")
-    with mc2:
-        monitor_stop = st.button("監視停止", key="monitor_stop")
-
-    if monitor_start and monitor_input:
-        raw_tickers = monitor_input.replace(",", "\n").replace("　", "\n").split("\n")
-        parsed = [t.strip() for t in raw_tickers if t.strip().isdigit()]
-        if parsed:
-            st.session_state["monitor_active"] = True
-            st.session_state["monitor_ticker_list"] = parsed
-        else:
-            st.warning("有効な証券コードが入力されていません。")
-
-    if monitor_stop:
-        st.session_state["monitor_active"] = False
-
-    # --- ウォッチリストから自動入力 ---
-    wl_stocks = db.get_stocks(str(today_jst()))
-    if not wl_stocks:
-        wl_stocks = db.get_stocks()
-    if wl_stocks:
-        wl_tickers = [f"{s['ticker']} ({s['name']})" for s in wl_stocks if s.get('ticker')]
-        selected_wl = st.multiselect("ウォッチリストから選択", wl_tickers, key="monitor_wl_select")
-        if selected_wl:
-            auto_tickers = [t.split(" ")[0] for t in selected_wl]
-            existing = monitor_input or ""
-            if st.button("選択した銘柄を追加", key="add_wl_to_monitor"):
-                combined = existing + ("\n" if existing else "") + "\n".join(auto_tickers)
-                st.session_state["monitor_tickers"] = combined
-                st.rerun()
-
-    # --- リアルタイム自動更新フラグメント ---
-    @st.fragment(run_every=timedelta(seconds=rss_interval))
-    def _monitor_fragment():
-      try:
-        if not st.session_state.get("monitor_active"):
-            st.info("証券コードを入力して「監視開始」を押してください。")
-            return
-
-        tickers = st.session_state.get("monitor_ticker_list", [])
-        if not tickers:
-            return
-
-        now_jst = datetime.now(JST)
-        st.caption(f"自動更新中（{rss_interval}秒間隔）　最終更新: {now_jst.strftime('%H:%M:%S')}")
-
-        if get_rss_prices is None:
-            st.error("rss_monitor モジュールの読み込みに失敗しています。ログを確認してください。")
-            return
-
+    # 5秒ごとに自動スキャンするフラグメント
+    @st.fragment(run_every=timedelta(seconds=5))
+    def _tdnet_fragment():
         try:
-            prices = get_rss_prices(tickers)
-        except Exception as e:
-            st.error(f"データ取得エラー: {e}")
-            import traceback
-            st.code(traceback.format_exc())
-            return
+            from data_fetch import fetch_tdnet_disclosures
+            from notifier import notify_disclosures as _notify_disc
 
-        if not prices:
-            st.warning("株価データを取得できませんでした。証券コードが正しいか確認してください（例: 6920）。yfinance APIの制限の可能性もあります。")
-            return
+            now_jst = datetime.now(JST)
+            st.caption(f"自動スキャン中（5秒間隔）　最終更新: {now_jst.strftime('%H:%M:%S')}")
 
-        price_map = {p["ticker"]: p for p in prices}
+            items = fetch_tdnet_disclosures()
+            new_items = []
+            for item in items:
+                disc_id = db.add_disclosure(item)
+                if disc_id is not None:
+                    item["id"] = disc_id
+                    new_items.append(item)
 
-        # 3分間+4%急騰チェック → LINE通知
-        if st.session_state.get("alert_surge", True) and check_surge_alerts:
-            try:
-                surge_hits = check_surge_alerts(prices)
-                if surge_hits:
-                    surge_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in surge_hits)
-                    st.success(f"🚀 急騰検出 → LINE通知済: {surge_names}")
-            except Exception as e:
-                st.warning(f"急騰チェックエラー: {e}")
+            if new_items:
+                try:
+                    _notify_disc(new_items, source="TDnet")
+                    for it in new_items:
+                        if it.get("id"):
+                            db.mark_disclosure_notified(it["id"])
+                except Exception as _ne:
+                    st.warning(f"LINE通知エラー: {_ne}")
+                st.success(f"新着: {len(new_items)}件 → LINE通知済")
 
-        # RSSスクリーニング（貸借/時価総額/出来高） → LINE通知
-        if st.session_state.get("alert_screen", True):
-            try:
-                from rss_monitor import screen_and_notify
-                screen_hits = screen_and_notify(prices)
-                if screen_hits:
-                    screen_names = ", ".join(f"{h['name']}（{h['ticker']}）" for h in screen_hits)
-                    st.success(f"🔍 スクリーニングHIT → LINE通知済: {screen_names}")
-            except Exception as e:
-                st.warning(f"スクリーニングエラー: {e}")
+            # 当日のTDnet開示一覧を表示
+            disclosures = db.get_disclosures(source="tdnet", target_date=str(today_jst()))
+            if disclosures:
+                df_disc = pd.DataFrame(disclosures)
+                disc_cols = {
+                    "id": "ID",
+                    "ticker": "コード",
+                    "company_name": "会社名",
+                    "title": "タイトル",
+                    "disclosed_at": "開示日時",
+                    "market_cap": "時価総額",
+                    "notified": "通知済",
+                }
+                df_disc_show = df_disc[[c for c in disc_cols if c in df_disc.columns]].rename(columns=disc_cols)
+                if "時価総額" in df_disc_show.columns:
+                    df_disc_show["時価総額"] = df_disc_show["時価総額"].apply(
+                        lambda x: f"{x / 100_000_000:.0f}億" if pd.notna(x) and x else ""
+                    )
+                if "通知済" in df_disc_show.columns:
+                    df_disc_show["通知済"] = df_disc_show["通知済"].apply(lambda x: "✓" if x else "")
+                st.dataframe(df_disc_show, use_container_width=True, hide_index=True)
+                st.caption(f"表示件数: {len(disclosures)}件")
 
-        # 価格 / 出来高アラート
-        if st.session_state.get("alert_price", True) and check_price_alerts:
-            try:
-                check_price_alerts(prices)
-            except Exception as e:
-                st.warning(f"価格アラートエラー: {e}")
+                with st.expander("ウォッチリストに追加"):
+                    add_disc_id = st.number_input("開示ID", min_value=1, step=1, key="add_disc_id")
+                    if st.button("ウォッチリストに追加", key="add_disc_to_wl"):
+                        target = next((d for d in disclosures if d["id"] == add_disc_id), None)
+                        if target:
+                            stock_id = db.add_stock({
+                                "date": str(today_jst()),
+                                "name": target["company_name"],
+                                "ticker": target["ticker"],
+                                "market_cap": target.get("market_cap"),
+                                "memo": f"TDnet開示: {target.get('title', '')}",
+                            })
+                            st.success(f"{target['company_name']}（{target['ticker']}）をウォッチリストに追加しました（ID: {stock_id}）")
+                        else:
+                            st.error("指定されたIDの開示が見つかりません")
+            else:
+                st.info("当日のTDnet開示（時価総額100億以下）はまだありません。自動スキャン中...")
 
-        # 節目アラート
-        if st.session_state.get("alert_fushi", True) and check_fushi_alerts:
-            try:
-                check_fushi_alerts(prices)
-            except Exception as e:
-                st.warning(f"節目アラートエラー: {e}")
+        except Exception as _err:
+            import traceback as _tb
+            st.error(f"TDnetスキャンエラー: {_err}")
+            st.code(_tb.format_exc())
 
-        # LINE通知ステータス表示
-        try:
-            from notifier import get_last_line_status as _get_line_st
-            _line_st = _get_line_st()
-            if _line_st["ok"] is not None:
-                if _line_st["ok"]:
-                    st.caption(f"LINE: {_line_st['msg']}")
-                else:
-                    st.warning(f"LINE通知エラー: {_line_st['msg']}")
-        except Exception:
-            pass
+    _tdnet_fragment()
 
-        st.success(f"取得成功: {len(prices)}/{len(tickers)} 銘柄")
-
-        for ticker in tickers:
-            p = price_map.get(ticker)
-            if not p:
-                st.warning(f"{ticker}: データなし")
-                continue
-
-            with st.container():
-                st.markdown("---")
-
-                change = p.get("change", 0) or 0
-                price_val = p.get("price", 0) or 0
-                prev_price = price_val - change if price_val else 0
-                change_pct = (change / prev_price * 100) if prev_price else 0
-
-                if change > 0:
-                    color = "red"
-                    sign = "+"
-                elif change < 0:
-                    color = "green"
-                    sign = ""
-                else:
-                    color = "gray"
-                    sign = ""
-
-                vol_man = (p.get("volume", 0) or 0) / 10_000
-
-                st.markdown(
-                    f"### {p.get('name', '')}（{ticker}）　"
-                    f"現在値 **¥{price_val:,.0f}**　"
-                    f"<span style='color:{color}; font-weight:bold'>"
-                    f"{sign}{change:,.0f}円 / {sign}{change_pct:.2f}%</span>　"
-                    f"出来高 {vol_man:,.0f}万株",
-                    unsafe_allow_html=True,
-                )
-
-
-      except Exception as _frag_err:
-        import traceback as _tb
-        st.error(f"監視パネルエラー: {type(_frag_err).__name__}: {_frag_err}")
-        st.code(_tb.format_exc())
-
-    _monitor_fragment()
 

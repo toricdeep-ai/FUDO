@@ -12,7 +12,7 @@ import schedule
 from analytics import load_config
 from notifier import notify_watchlist_summary, notify_disclosures, notify_taishaku_new
 from notion_sync import sync_all_to_notion
-from data_fetch import fetch_kabutan_disclosures, fetch_prtimes_latest, fetch_kabutan_taishaku_new
+from data_fetch import fetch_tdnet_disclosures, fetch_kabutan_taishaku_new
 import database as db
 
 
@@ -57,8 +57,8 @@ def _is_zaraba() -> bool:
     return (540 <= t <= 690) or (750 <= t <= 900)  # 9:00-11:30, 12:30-15:00
 
 
-def job_check_disclosures():
-    """適時開示チェック（ザラバ中5分間隔 / それ以外30分間隔）"""
+def job_check_tdnet():
+    """TDnet適時開示チェック（ザラバ中5分間隔 / それ以外30分間隔）"""
     global _last_offhours_run
 
     # ザラバ外は30分間隔にスロットリング
@@ -74,48 +74,39 @@ def job_check_disclosures():
 
     new_items = []
 
-    # 株探 適時開示取得
+    # TDnet 適時開示取得
     try:
-        kabutan_items = fetch_kabutan_disclosures()
-        for item in kabutan_items:
+        tdnet_items = fetch_tdnet_disclosures()
+        for item in tdnet_items:
             disc_id = db.add_disclosure(item)
             if disc_id is not None:
                 item["id"] = disc_id
                 new_items.append(item)
-        print(f"[Scheduler] 株探開示: {len(kabutan_items)}件取得, {len(new_items)}件新規")
+        print(f"[Scheduler] TDnet開示: {len(tdnet_items)}件取得, {len(new_items)}件新規")
     except Exception as e:
-        print(f"[Scheduler] 株探開示エラー: {e}")
-
-    # PRTimes取得
-    kabutan_new_count = len(new_items)
-    try:
-        prtimes_items = fetch_prtimes_latest()
-        for item in prtimes_items:
-            disc_id = db.add_disclosure(item)
-            if disc_id is not None:
-                item["id"] = disc_id
-                new_items.append(item)
-        prtimes_new = len(new_items) - kabutan_new_count
-        print(f"[Scheduler] PRTimes: {len(prtimes_items)}件取得, {prtimes_new}件新規")
-    except Exception as e:
-        print(f"[Scheduler] PRTimesエラー: {e}")
+        print(f"[Scheduler] TDnet開示エラー: {e}")
 
     # LINE通知
     if new_items and auto_notify:
-        # ソース別に通知を分ける
-        kabutan_news = [d for d in new_items if d.get("source") == "kabutan"]
-        prtimes_news = [d for d in new_items if d.get("source") == "prtimes"]
-        if kabutan_news:
-            notify_disclosures(kabutan_news, source="株探")
-        if prtimes_news:
-            notify_disclosures(prtimes_news, source="PRTimes")
+        notify_disclosures(new_items, source="TDnet")
 
         # 通知済みマーク
         for item in new_items:
             if item.get("id"):
                 db.mark_disclosure_notified(item["id"])
 
-    print(f"[Scheduler] 適時開示チェック完了: 新規{len(new_items)}件")
+    print(f"[Scheduler] TDnet開示チェック完了: 新規{len(new_items)}件")
+
+
+def job_check_dde_ranking():
+    """値上がりランキング監視（MarketSpeed IIローカル専用）"""
+    try:
+        from dde_monitor import check_and_notify_ranking
+        check_and_notify_ranking()
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[Scheduler] DDE rankingエラー: {e}")
 
 
 # Track already-notified taishaku tickers per session
@@ -157,12 +148,17 @@ def start_scheduler():
             lambda: job_notion_sync() if is_weekday() else None
         )
 
-    # 適時開示チェック（ザラバ中5分 / それ以外30分）
-    schedule.every(5).minutes.do(job_check_disclosures)
+    # TDnet適時開示チェック（ザラバ中5分 / それ以外30分）
+    schedule.every(5).minutes.do(job_check_tdnet)
 
     # 貸借銘柄指定チェック（平日 5分間隔）
     schedule.every(5).minutes.do(
         lambda: job_check_taishaku() if is_weekday() else None
+    )
+
+    # DDE値上がりランキング監視（ザラバ中30秒間隔、ローカル専用）
+    schedule.every(30).seconds.do(
+        lambda: job_check_dde_ranking() if is_weekday() and _is_zaraba() else None
     )
 
     # 夕方サマリー（平日 15:30）
@@ -173,8 +169,9 @@ def start_scheduler():
     print("[Scheduler] 起動しました")
     print("  - 08:30  朝サマリー（LINE）")
     print("  - 09:00 / 12:00 / 15:00  Notion同期")
-    print("  - 5分間隔   適時開示チェック（ザラバ中5分 / 時間外30分）")
+    print("  - 5分間隔   TDnet開示チェック（ザラバ中5分 / 時間外30分）")
     print("  - 5分間隔   貸借銘柄指定チェック（時価総額100億以下/出来高100万以上）")
+    print("  - 30秒間隔  DDE値上がりランキング監視（ザラバ中・ローカル専用）")
     print("  - 15:30  夕方サマリー（LINE）")
     print("  ※ 平日のみ実行。Ctrl+C で終了。")
 
