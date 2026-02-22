@@ -1,4 +1,4 @@
-"""FUDO - データ取得モジュール（PRTimes・株探）"""
+"""FUDO - データ取得モジュール（PRTimes・株探・TDnet）"""
 
 from __future__ import annotations
 
