@@ -65,8 +65,8 @@ api:
     volume_min: 1000000
 
 line:
-  channel_access_token: ""
-  user_id: ""
+  channel_access_token: "DxJtytfj4GOlvq1eKg/lQCwk9xHiNCS4JywZfGj7/oaPrqevbH3lPfnlwsXBDupZzRMh34zcFdGifgNUtbRQKu1U7gjXx9YZjiFpUtuWB2aa/JvYUALpYtIGx+vbhYkcOTffIAHA/QXnBF6RFQpJuwdB04t89/1O/w1cDnyilFU="
+  user_id: "Ufc9e6377e984277f91830ab6c67c8a47"
   channel_secret: ""
   notify_on_grade_change: true
   notify_on_price_alert: true
