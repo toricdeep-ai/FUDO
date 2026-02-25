@@ -133,6 +133,7 @@ def init_db():
         ("trades", "stop_yakan_pts", "INTEGER DEFAULT 0"),
         ("trades", "stop_mochikoshi", "INTEGER DEFAULT 0"),
         ("watchlist", "prev_day_sell_volume", "INTEGER DEFAULT 0"),
+        ("trades", "stop_renkaiato", "INTEGER DEFAULT 0"),
     ]
     for table, col, col_type in _migrate_columns:
         try:
@@ -253,9 +254,9 @@ def add_trade(data: dict) -> int:
              lot, pnl, result,
              stop_osaedama, stop_itakyushu, stop_itakieru, stop_fushi_noforce,
              stop_hamekomi, stop_sashene_care, stop_ita_yowaku,
-             stop_ue_kawanai, stop_yakan_pts, stop_mochikoshi,
+             stop_ue_kawanai, stop_yakan_pts, stop_mochikoshi, stop_renkaiato,
              meigara_quality, memo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("date", str(date.today())),
         data["name"],
@@ -278,6 +279,7 @@ def add_trade(data: dict) -> int:
         data.get("stop_ue_kawanai", 0),
         data.get("stop_yakan_pts", 0),
         data.get("stop_mochikoshi", 0),
+        data.get("stop_renkaiato", 0),
         data.get("meigara_quality"),
         data.get("memo"),
     ))

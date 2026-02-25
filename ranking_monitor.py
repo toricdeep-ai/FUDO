@@ -99,24 +99,30 @@ def fetch_kabutan_rising_stocks(
             if not re.match(r"^\d{4}$", ticker):
                 continue
 
-            # --- 銘柄名 ---
-            name = tds[1].get_text(strip=True) if len(tds) > 1 else ""
+            # --- 銘柄名（リンクテキストを優先、市場区分が混入しないようにする） ---
+            # 現在の列順: コード/銘柄名/市場/株価/前日比/前日比率/出来高/PER/PBR/利回り
+            name_td = tds[1] if len(tds) > 1 else None
+            if name_td:
+                name_link = name_td.select_one("a")
+                name = name_link.get_text(strip=True) if name_link else name_td.get_text(strip=True)
+            else:
+                name = ""
 
-            # --- 現在値 ---
+            # --- 現在値（td[3]） ---
             price = 0.0
             try:
-                price = float(tds[4].get_text(strip=True).replace(",", "")) if len(tds) > 4 else 0.0
+                price = float(tds[3].get_text(strip=True).replace(",", "")) if len(tds) > 3 else 0.0
             except ValueError:
                 pass
 
-            # --- 前日比率(%) ---
-            # kabutan warning テーブルの列順: コード/銘柄/市場/業種/現在値/前日比/前日比率/出来高/売買代金
+            # --- 前日比率(%)（td[5]） ---
+            # 現在の列順: コード/銘柄名/市場/株価/前日比/前日比率/出来高/PER/PBR/利回り
             pct = 0.0
             try:
-                pct_text = tds[6].get_text(strip=True).replace(",", "").replace("%", "").replace("+", "").replace("▲", "-")
+                pct_text = tds[5].get_text(strip=True).replace(",", "").replace("%", "").replace("+", "").replace("▲", "-")
                 pct = float(pct_text)
             except (ValueError, IndexError):
-                # fallback: 全tdから%含む値を探す
+                # fallback: 全tdから0〜50の範囲の値を探す
                 for td in tds:
                     t = td.get_text(strip=True).replace(",", "").replace("%", "")
                     try:
@@ -130,10 +136,10 @@ def fetch_kabutan_rising_stocks(
             if pct < pct_min:
                 continue
 
-            # --- 出来高 ---
+            # --- 出来高（td[6]） ---
             vol = 0
             try:
-                vol_text = tds[7].get_text(strip=True).replace(",", "") if len(tds) > 7 else "0"
+                vol_text = tds[6].get_text(strip=True).replace(",", "") if len(tds) > 6 else "0"
                 vol = int(vol_text)
             except (ValueError, IndexError):
                 # fallback: 大きな数値のtdを探す

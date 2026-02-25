@@ -61,7 +61,12 @@ def fetch_tdnet_disclosures(target_date: str | None = None) -> list[dict]:
         results = []
         today_str = datetime.now().strftime("%Y-%m-%d")
 
-        table = soup.select_one("table#main-list-table") or soup.select_one("table.listbox")
+        # テーブルセレクタ（id/class が変わってもフォールバック）
+        table = (
+            soup.select_one("table#main-list-table")
+            or soup.select_one("table.listbox")
+            or soup.select_one("table")  # 属性なしテーブルにも対応
+        )
         rows = table.select("tr") if table else soup.select("tr")
 
         for tr in rows:

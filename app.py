@@ -240,11 +240,13 @@ with tab2:
             t_stop7 = st.checkbox("買い板弱くなる", key="t_stop7")
         with sc8:
             t_stop8 = st.checkbox("上を買わなくなる", key="t_stop8")
-        sc9, sc10, _, _ = st.columns(4)
+        sc9, sc10, sc11, _ = st.columns(4)
         with sc9:
             t_stop9 = st.checkbox("夜間PTS", key="t_stop9")
         with sc10:
             t_stop10 = st.checkbox("持ち越し翌日売り", key="t_stop10")
+        with sc11:
+            t_stop11 = st.checkbox("連買後", key="t_stop11")
 
         t_memo = st.text_area("メモ", height=68, key="t_memo")
         t_submitted = st.form_submit_button("トレード記録を保存", use_container_width=True)
@@ -279,6 +281,7 @@ with tab2:
             "stop_ue_kawanai": 1 if t_stop8 else 0,
             "stop_yakan_pts": 1 if t_stop9 else 0,
             "stop_mochikoshi": 1 if t_stop10 else 0,
+            "stop_renkaiato": 1 if t_stop11 else 0,
             "meigara_quality": t_quality,
             "memo": t_memo,
         })
@@ -320,13 +323,13 @@ with tab2:
             "stop_hamekomi": "はめこみ", "stop_sashene_care": "指値ケア",
             "stop_ita_yowaku": "板弱化",
             "stop_ue_kawanai": "上買わず", "stop_yakan_pts": "夜間PTS",
-            "stop_mochikoshi": "持越翌日売",
+            "stop_mochikoshi": "持越翌日売", "stop_renkaiato": "連買後",
             "memo": "メモ",
         }
         df_show = df_t[[c for c in show_cols if c in df_t.columns]].rename(columns=show_cols)
 
         # チェックボックス列を○×表示
-        for col in ["抑え玉", "板吸収", "板消え", "勢いなし", "はめこみ", "指値ケア", "板弱化", "上買わず", "夜間PTS", "持越翌日売"]:
+        for col in ["抑え玉", "板吸収", "板消え", "勢いなし", "はめこみ", "指値ケア", "板弱化", "上買わず", "夜間PTS", "持越翌日売", "連買後"]:
             if col in df_show.columns:
                 df_show[col] = df_show[col].apply(lambda x: "✓" if x else "")
 
@@ -742,9 +745,13 @@ with tab7:
                 st.info("当日のTDnet開示（時価総額100億以下）はまだありません。自動スキャン中...")
 
         except Exception as _err:
-            import traceback as _tb
-            st.error(f"TDnetスキャンエラー: {_err}")
-            st.code(_tb.format_exc())
+            _tdnet_err_count = st.session_state.get("_tdnet_err_count", 0) + 1
+            st.session_state["_tdnet_err_count"] = _tdnet_err_count
+            if _tdnet_err_count <= 3:
+                st.warning(f"TDnetスキャン一時エラー（{_tdnet_err_count}回目）: {_err}")
+            # 4回目以降はエラー表示せず静かにスキップ
+        else:
+            st.session_state["_tdnet_err_count"] = 0
 
     _tdnet_fragment()
 
@@ -812,11 +819,15 @@ with tab8:
                                 f" 時価総額{cap_str}"
                             )
                         try:
-                            _send_line("\n".join(lines))
-                            for h in new_hits:
-                                notified.add(h["ticker"])
-                            st.session_state["rk_notified"] = notified
-                            st.success(f"LINE通知送信: {len(new_hits)}件")
+                            ok = _send_line("\n".join(lines))
+                            if ok:
+                                for h in new_hits:
+                                    notified.add(h["ticker"])
+                                st.session_state["rk_notified"] = notified
+                                st.success(f"LINE通知送信: {len(new_hits)}件")
+                            else:
+                                from notifier import get_last_line_status as _gls
+                                st.warning(f"LINE通知失敗: {_gls().get('msg', '不明')}")
                         except Exception as _le:
                             st.warning(f"LINE通知エラー: {_le}")
 
@@ -846,9 +857,13 @@ with tab8:
                 st.success("通知履歴をリセットしました")
 
         except Exception as _err:
-            import traceback as _tb
-            st.error(f"値上がり監視エラー: {_err}")
-            st.code(_tb.format_exc())
+            _rk_err_count = st.session_state.get("_rk_err_count", 0) + 1
+            st.session_state["_rk_err_count"] = _rk_err_count
+            if _rk_err_count <= 3:
+                st.warning(f"値上がり監視一時エラー（{_rk_err_count}回目）: {_err}")
+            # 4回目以降はエラー表示せず静かにスキップ
+        else:
+            st.session_state["_rk_err_count"] = 0
 
     _ranking_fragment()
 
