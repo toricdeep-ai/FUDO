@@ -93,65 +93,44 @@ def fetch_kabutan_rising_stocks(
             if len(tds) < 5:
                 continue
 
-            # --- 証券コード ---
+            # --- 証券コード（td[0]） ---
             code_text = tds[0].get_text(strip=True)
             ticker = re.sub(r"\D", "", code_text)
             if not re.match(r"^\d{4}$", ticker):
                 continue
 
-            # --- 銘柄名（リンクテキストを優先、市場区分が混入しないようにする） ---
-            # 現在の列順: コード/銘柄名/市場/株価/前日比/前日比率/出来高/PER/PBR/利回り
-            name_td = tds[1] if len(tds) > 1 else None
-            if name_td:
-                name_link = name_td.select_one("a")
-                name = name_link.get_text(strip=True) if name_link else name_td.get_text(strip=True)
-            else:
-                name = ""
+            # --- 銘柄名（<th scope="row"> に入っている） ---
+            # 実際の構造: th=銘柄名, td[0]=コード, td[1]=市場区分, td[2]=概要icon,
+            #              td[3]=charticon, td[4]=株価, td[5]=S高表示,
+            #              td[6]=前日比額(w61), td[7]=前日比率%(w50), td[8]=出来高
+            th_el = tr.find("th")
+            name = th_el.get_text(strip=True) if th_el else tds[0].get_text(strip=True)
 
-            # --- 現在値（td[3]） ---
+            # --- 現在値（td[4]） ---
             price = 0.0
             try:
-                price = float(tds[3].get_text(strip=True).replace(",", "")) if len(tds) > 3 else 0.0
+                price = float(tds[4].get_text(strip=True).replace(",", "")) if len(tds) > 4 else 0.0
             except ValueError:
                 pass
 
-            # --- 前日比率(%)（td[5]） ---
-            # 現在の列順: コード/銘柄名/市場/株価/前日比/前日比率/出来高/PER/PBR/利回り
+            # --- 前日比率(%)（td[7]: class='w50'） ---
             pct = 0.0
             try:
-                pct_text = tds[5].get_text(strip=True).replace(",", "").replace("%", "").replace("+", "").replace("▲", "-")
+                pct_text = tds[7].get_text(strip=True).replace(",", "").replace("%", "").replace("+", "").replace("▲", "-")
                 pct = float(pct_text)
             except (ValueError, IndexError):
-                # fallback: 全tdから0〜50の範囲の値を探す
-                for td in tds:
-                    t = td.get_text(strip=True).replace(",", "").replace("%", "")
-                    try:
-                        v = float(t.replace("+", "").replace("▲", ""))
-                        if 0 < v < 50:
-                            pct = v
-                            break
-                    except ValueError:
-                        pass
+                pass
 
             if pct < pct_min:
                 continue
 
-            # --- 出来高（td[6]） ---
+            # --- 出来高（td[8]） ---
             vol = 0
             try:
-                vol_text = tds[6].get_text(strip=True).replace(",", "") if len(tds) > 6 else "0"
+                vol_text = tds[8].get_text(strip=True).replace(",", "") if len(tds) > 8 else "0"
                 vol = int(vol_text)
             except (ValueError, IndexError):
-                # fallback: 大きな数値のtdを探す
-                for td in tds:
-                    num = re.sub(r"[^\d]", "", td.get_text(strip=True))
-                    if num and len(num) >= 6:
-                        try:
-                            v = int(num)
-                            if v > vol:
-                                vol = v
-                        except ValueError:
-                            pass
+                pass
 
             if vol < vol_min:
                 continue
@@ -164,7 +143,7 @@ def fetch_kabutan_rising_stocks(
                 "volume": vol,
             })
 
-        print(f"[Ranking] 一次候補: {len(candidates)}件（pct≥{pct_min}%, vol≥{vol_min // 10000}万株）")
+        print(f"[Ranking] 一次候補: {len(candidates)}件（pct>={pct_min}%, vol>={vol_min // 10000}万株）")
 
         # --- 時価総額・貸借チェック（キャッシュ活用） ---
         results = []

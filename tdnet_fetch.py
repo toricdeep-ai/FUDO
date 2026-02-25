@@ -80,7 +80,8 @@ def fetch_tdnet_disclosures(target_date: str | None = None) -> list[dict]:
 
             code_text = tds[1].get_text(strip=True)
             ticker = re.sub(r"\D", "", code_text)
-            if not re.match(r"^\d{4}$", ticker):
+            # 4桁または5桁コードを受け付ける（5桁は社債・ワラント等の場合もある）
+            if not re.match(r"^\d{4,5}$", ticker):
                 continue
 
             company_name = tds[2].get_text(strip=True) if len(tds) > 2 else ""
@@ -102,7 +103,19 @@ def fetch_tdnet_disclosures(target_date: str | None = None) -> list[dict]:
             if not title:
                 continue
 
-            cap = _get_market_cap_cached(ticker)
+            # ETF/ETN排除：タイトルまたは会社名にETF・ETN・投資信託キーワードを含む場合スキップ
+            _etf_keywords = ("上場投信", "ＥＴＦ", "ETF", "ＥＴＮ", "ETN", "投資信託", "NEXT FUNDS", "上場投資信託", "上場ETN")
+            if any(kw in title or kw in company_name for kw in _etf_keywords):
+                continue
+
+            # 決算短信排除：定例の決算短信はスキップ
+            _kessan_keywords = ("決算短信", "四半期報告書")
+            if any(kw in title for kw in _kessan_keywords):
+                continue
+
+            # 時価総額フィルタ（5桁コードはkabutan検索用に4桁prefix試行）
+            lookup_ticker = ticker[:4] if len(ticker) == 5 else ticker
+            cap = _get_market_cap_cached(lookup_ticker)
             if cap is not None and cap > cap_max:
                 continue
 
